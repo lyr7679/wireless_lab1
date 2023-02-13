@@ -1,0 +1,242 @@
+// CSE 4377/5377 Modulator Example
+// Jason Losh
+
+//-----------------------------------------------------------------------------
+// Hardware Target
+//-----------------------------------------------------------------------------
+
+// Target Platform: EK-TM4C123GXL
+// Target uC:       TM4C123GH6PM
+// System Clock:    80 MHz
+
+// Hardware configuration:
+// DAC on SPI0 Interface:
+//   MOSI on PA5 (SSI0Tx)
+//   ~CS on PA3  (SSI0Fss)
+//   SCLK on PA2 (SSI0Clk)
+//   ~LDAC on PA4
+
+//---------------------------------------------------------x--------------------
+// Device includes, defines, and assembler directives
+//-----------------------------------------------------------------------------
+
+#include <stdlib.h>
+#include <inttypes.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdio.h>
+#include <math.h>
+#include "tm4c123gh6pm.h"
+#include "clock.h"
+#include "gpio.h"
+#include "nvic.h"
+#include "spi0.h"
+#include "uart0.h"
+#include "wait.h"
+
+#define LDAC (*((volatile uint32_t *)(0x42000000 + (0x400043FC-0x40000000)*32 + 4*4)))
+
+#define MAX_CHARS 80
+
+#define FCYC 80e6
+#define FDAC 20e6
+#define FS 100000
+
+//-----------------------------------------------------------------------------
+// Global variables
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// EEPROM
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// LUT
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// Control
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// Timer
+//-----------------------------------------------------------------------------
+
+void setSymbolRate(float sampleRate)
+{
+    TIMER1_TAILR_R = round(FCYC/sampleRate);
+}
+
+// Must leave this timer on to ensure UI commands like DC are updated
+void initSymbolTimer(void)
+{
+    // Enable clocks
+    SYSCTL_RCGCTIMER_R |= SYSCTL_RCGCTIMER_R1;
+    _delay_cycles(3);
+
+    // Configure Timer 1 as the time base
+    TIMER1_CTL_R &= ~TIMER_CTL_TAEN;                 // turn-off timer before reconfiguring
+    TIMER1_CFG_R = TIMER_CFG_32_BIT_TIMER;           // configure as 32-bit timer (A+B)
+    TIMER1_TAMR_R = TIMER_TAMR_TAMR_PERIOD;          // configure for periodic mode (count down)
+    TIMER1_TAILR_R = round(FCYC/FS);                 // set load value to match sample rate
+    TIMER1_IMR_R = TIMER_IMR_TATOIM;                 // turn-on interrupts for timeout in timer module
+    TIMER1_CTL_R |= TIMER_CTL_TAEN;                  // turn-on timer
+    enableNvicInterrupt(INT_TIMER1A);                // turn-on interrupt 37 (TIMER1A) in NVIC
+}
+
+// Symbol timer called by timer 1
+void symbolTimerIsr()
+{
+}
+
+//-----------------------------------------------------------------------------
+// Subroutines
+//-----------------------------------------------------------------------------
+
+// Initialize Hardware
+void initHw()
+{
+    // Initialize system clock to 40 MHz
+    initSystemClockTo40Mhz();
+
+    // Setup UART0 baud rate
+    initUart0();
+    setUart0BaudRate(115200, FCYC);
+
+    // Initialize SPI0
+    initSpi0(USE_SSI0_FSS);
+    setSpi0BaudRate(FDAC, FCYC);
+    setSpi0Mode(0, 0);
+
+    // Initialize symbol timer
+    initSymbolTimer();
+
+}
+
+//-----------------------------------------------------------------------------
+// UI
+//-----------------------------------------------------------------------------
+
+void processShell()
+{
+    bool knownCommand = false;
+    bool end;
+    char c;
+    static char strInput[MAX_CHARS+1];
+    char* token;
+    static uint8_t count = 0;
+    if (kbhitUart0())
+    {
+        c = tolower(getcUart0());
+        end = (c == 13) || (count == MAX_CHARS);
+        if (!end)
+        {
+            if ((c == 8 || c == 127) && count > 0)
+                count--;
+            if (c >= ' ' && c < 127)
+                strInput[count++] = c;
+        }
+        else
+        {
+            strInput[count] = '\0';
+            count = 0;
+            token = strtok(strInput, " ");
+
+            // dc a|b DC
+            if (strcmp(token, "dc") == 0)
+            {
+                knownCommand = true;
+                // add code to process command
+            }
+
+            // sine a|b FREQ [AMPL [PHASE [DC] ] ]
+            if (strcmp(token, "sine") == 0)
+            {
+                knownCommand = true;
+                // add code to process command
+            }
+
+            // tone FREQ [AMPL [PHASE [DC] ] ]
+            if (strcmp(token, "tone") == 0)
+            {
+                knownCommand = true;
+                // add code to process command
+            }
+
+            // mod bpsk|qpsk|8psk|16qam
+            if (strcmp(token, "mod") == 0)
+            {
+                knownCommand = true;
+                // add code to process command
+            }
+
+            // filter FILTER
+            if (strcmp(token, "filter") == 0)
+            {
+                knownCommand = true;
+                // add code to process command
+            }
+
+            // raw a|b RAW
+            if (strcmp(token, "raw") == 0)
+            {
+                knownCommand = true;
+                // add code to process command
+            }
+
+            // reboot
+            if (strcmp(token, "reboot") == 0)
+            {
+                knownCommand = true;
+                NVIC_APINT_R = NVIC_APINT_VECTKEY | NVIC_APINT_SYSRESETREQ;
+            }
+
+            if (!knownCommand)
+                putsUart0("Invalid command\n");
+
+            // help
+            if (strcmp(token, "help") == 0)
+            {
+                putsUart0("Commands:\n");
+                putsUart0("  dc       i|q DC\n");
+                putsUart0("  sine     i|q FREQ [AMPL [PHASE [DC] ] ]\n");
+                putsUart0("  tone     FREQ [AMPL [PHASE [DC] ] ]\n");
+                putsUart0("  mod      ook|bpsk|qpsk|8psk|16qam|64qam\n");
+                putsUart0("  filter   rrc|off\n");
+                putsUart0("  raw      i|q RAW\n");
+                putsUart0("  reboot\n");
+                putsUart0("\n");
+                putsUart0("  where FREQ = [-Fs/2, Fs/2] Hz\n");
+                putsUart0("        AMPL = [0, 0.5] V\n");
+                putsUart0("        DC   = [-0.5, 0.5] V\n");
+                putsUart0("        RAW  = [0, 4095] LSb\n");
+            }
+        }
+    }
+}
+
+//-----------------------------------------------------------------------------
+// Main
+//-----------------------------------------------------------------------------
+
+int main(void)
+{
+    // Initialize hardware
+    initHw();
+
+    // Randomize data set
+
+    // Greeting
+    putsUart0("CSE 4377/5377 Modulator\n");
+
+    // Main Loop
+    while (true)
+    {
+        // UI
+        processShell();
+
+        // Other foreground tasks as needed
+    }
+}
