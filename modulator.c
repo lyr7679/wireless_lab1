@@ -163,7 +163,7 @@ void processShell()
                 // add code to process command
                 aOrB = strtok(NULL, " ");
                 strDC = strtok(NULL, " ");
-                DC = atoi(strDC) + .5; //get value between 0 and 1
+                DC = (float) atof(strDC) + .5; //get value between 0 and 1
                 total += DC * 4096; //value is now between 0 and 4095
                 total += 4096 + 8192; //turn on bit 12 and 13
                 total += (aOrB[0] - 97) * 32786; //if b turn on bit 15 else leave as 0
