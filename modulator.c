@@ -44,6 +44,12 @@
 #define FDAC 20e6
 #define FS 100000
 
+#define SSI0TX PORTA,5
+#define SSI0RX PORTA,4
+#define SSI0FSS PORTA,3
+#define SSI0CLK PORTA,2
+#define LDAC PORTD,6
+
 //-----------------------------------------------------------------------------
 // Global variables
 //-----------------------------------------------------------------------------
@@ -127,6 +133,12 @@ void processShell()
     static char strInput[MAX_CHARS+1];
     char* token;
     static uint8_t count = 0;
+
+    char* aOrB;
+    char* strDC;
+    float DC = 0.0;
+    uint16_t total = 0;
+
     if (kbhitUart0())
     {
         c = tolower(getcUart0());
@@ -149,6 +161,18 @@ void processShell()
             {
                 knownCommand = true;
                 // add code to process command
+                aOrB = strtok(NULL, " ");
+                strDC = strtok(NULL, " ");
+                DC = atoi(strDC) + .5; //get value between 0 and 1
+                total += DC * 4096; //value is now between 0 and 4095
+                total += 4096 + 8192; //turn on bit 12 and 13
+                total += (aOrB[0] - 97) * 32786; //if b turn on bit 15 else leave as 0
+
+                setPinValue(LDAC, 1);
+                setPinValue(SSI0FSS, 0);
+                writeSpi0Data(total);
+                setPinValue(SSI0FSS, 1);
+                setPinValue(LDAC, 0);
             }
 
             // sine a|b FREQ [AMPL [PHASE [DC] ] ]
