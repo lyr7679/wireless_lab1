@@ -50,6 +50,9 @@
 #define SSI0CLK PORTA,2
 #define LDAC PORTD,6
 
+#define DC_WRITE_AB   0x8000
+#define DC_WRITE_GA   0x2000
+#define DC_WRITE_SHDN 0x1000
 //-----------------------------------------------------------------------------
 // Global variables
 //-----------------------------------------------------------------------------
@@ -160,13 +163,13 @@ void processShell()
             if (strcmp(token, "dc") == 0)
             {
                 knownCommand = true;
-                // add code to process command
+
                 aOrB = strtok(NULL, " ");
                 strDC = strtok(NULL, " ");
                 DC = (float) atof(strDC) + .5; //get value between 0 and 1
                 total += DC * 4096; //value is now between 0 and 4095
-                total += 4096 + 8192; //turn on bit 12 and 13
-                total += (aOrB[0] - 97) * 32786; //if b turn on bit 15 else leave as 0
+                total |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
+                total += (aOrB[0] - 97) * DC_WRITE_AB; //if b turn on bit 15 else leave as 0
 
                 setPinValue(LDAC, 1);
                 setPinValue(SSI0FSS, 0);
