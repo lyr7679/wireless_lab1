@@ -53,10 +53,16 @@
 #define DC_WRITE_AB   0x8000
 #define DC_WRITE_GA   0x2000
 #define DC_WRITE_SHDN 0x1000
+#define pi 3.14159265
 //-----------------------------------------------------------------------------
 // Global variables
 //-----------------------------------------------------------------------------
-
+uint16_t LUTA[4096];
+uint16_t LUTB[4096];
+uint16_t index = 0;
+uint16_t DCValue = 0; //raw dc value from 0-4096, if zero means ac is on
+uint16_t ACValue = 0;
+bool DACA = true;
 //-----------------------------------------------------------------------------
 // EEPROM
 //-----------------------------------------------------------------------------
@@ -98,6 +104,26 @@ void initSymbolTimer(void)
 // Symbol timer called by timer 1
 void symbolTimerIsr()
 {
+    if(DCValue == 0) //means ac
+    {
+        setPinValue(LDAC, 1);
+        setPinValue(SSI0FSS, 0);
+        writeSpi0Data(DCValue);
+        setPinValue(SSI0FSS, 1);
+        setPinValue(LDAC, 0);
+    }
+    else
+    {
+        ACValue = 0;
+        if(index == 4096)
+            index = 0;
+        setPinValue(LDAC, 1);
+        setPinValue(SSI0FSS, 0);
+        writeSpi0Data();
+        setPinValue(SSI0FSS, 1);
+        setPinValue(LDAC, 0);
+        index++;
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -167,15 +193,9 @@ void processShell()
                 aOrB = strtok(NULL, " ");
                 strDC = strtok(NULL, " ");
                 DC = (float) atof(strDC) + .5; //get value between 0 and 1
-                total += DC * 4096; //value is now between 0 and 4095
-                total |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
-                total += (aOrB[0] - 97) * DC_WRITE_AB; //if b turn on bit 15 else leave as 0
-
-                setPinValue(LDAC, 1);
-                setPinValue(SSI0FSS, 0);
-                writeSpi0Data(total);
-                setPinValue(SSI0FSS, 1);
-                setPinValue(LDAC, 0);
+                DCValue += DC * 4096; //value is now between 0 and 4095
+                DCValue |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
+                DCValue += (aOrB[0] - 97) * DC_WRITE_AB; //if b turn on bit 15 else leave as 0
             }
 
             // sine a|b FREQ [AMPL [PHASE [DC] ] ]
@@ -211,6 +231,18 @@ void processShell()
             {
                 knownCommand = true;
                 // add code to process command
+
+                aOrB = strtok(NULL, " ");
+                strDC = strtok(NULL, " ");
+                total += atoi(strDC); //raw num between 0 and 4096
+                total |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
+                total += (aOrB[0] - 97) * DC_WRITE_AB; //if b turn on bit 15 else leave as 0
+
+                setPinValue(LDAC, 1);
+                setPinValue(SSI0FSS, 0);
+                writeSpi0Data(total);
+                setPinValue(SSI0FSS, 1);
+                setPinValue(LDAC, 0);
             }
 
             // reboot
@@ -252,6 +284,13 @@ int main(void)
 {
     // Initialize hardware
     initHw();
+
+    //create lookup tables
+    for(int i = 0; i < 4096; i++)
+    {
+        LUTA[i] = 2047 + 2047 * sin((i / 4096) * (2 * pi));
+        LUTB[i] = 2047 + 2047 * sin((i / 4096) * (2 * pi));
+    }
 
     // Randomize data set
 
