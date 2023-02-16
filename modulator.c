@@ -50,6 +50,9 @@
 #define SSI0CLK PORTA,2
 #define LDAC PORTD,6
 
+#define MAX_ARGS 5
+#define WHITESPACE " "
+
 #define DC_WRITE_AB   0x8000
 #define DC_WRITE_GA   0x2000
 #define DC_WRITE_SHDN 0x1000
@@ -154,13 +157,34 @@ void initHw()
 // UI
 //-----------------------------------------------------------------------------
 
+
+uint8_t tokenizeInput(char *strInput, char *token_arr[])
+{
+    uint8_t token_count = 0;
+    char *token;
+
+   /* get the first token */
+   token = strtok(strInput, WHITESPACE);
+   token_arr[token_count] = token;
+   token_count++;
+
+   /* walk through other tokens */
+   while( token != NULL ) {
+       token = strtok(NULL, WHITESPACE);
+       token_arr[token_count] = token;
+       token_count++;
+   }
+   return token_count;
+}
+
 void processShell()
 {
     bool knownCommand = false;
     bool end;
     char c;
     static char strInput[MAX_CHARS+1];
-    char* token;
+    char* token[MAX_ARGS];
+    uint8_t token_count = 0;
     static uint8_t count = 0;
 
     char* aOrB;
@@ -183,10 +207,12 @@ void processShell()
         {
             strInput[count] = '\0';
             count = 0;
-            token = strtok(strInput, " ");
+            //token = strtok(strInput, " ");
+
+            token_count = tokenizeInput(strInput, token);
 
             // dc a|b DC
-            if (strcmp(token, "dc") == 0)
+            if (strcmp(token[0], "dc") == 0)
             {
                 knownCommand = true;
 
@@ -199,35 +225,35 @@ void processShell()
             }
 
             // sine a|b FREQ [AMPL [PHASE [DC] ] ]
-            if (strcmp(token, "sine") == 0)
+            if (strcmp(token[0], "sine") == 0)
             {
                 knownCommand = true;
                 // add code to process command
             }
 
             // tone FREQ [AMPL [PHASE [DC] ] ]
-            if (strcmp(token, "tone") == 0)
+            if (strcmp(token[0], "tone") == 0)
             {
                 knownCommand = true;
                 // add code to process command
             }
 
             // mod bpsk|qpsk|8psk|16qam
-            if (strcmp(token, "mod") == 0)
+            if (strcmp(token[0], "mod") == 0)
             {
                 knownCommand = true;
                 // add code to process command
             }
 
             // filter FILTER
-            if (strcmp(token, "filter") == 0)
+            if (strcmp(token[0], "filter") == 0)
             {
                 knownCommand = true;
                 // add code to process command
             }
 
             // raw a|b RAW
-            if (strcmp(token, "raw") == 0)
+            if (strcmp(token[0], "raw") == 0)
             {
                 knownCommand = true;
                 // add code to process command
@@ -246,7 +272,7 @@ void processShell()
             }
 
             // reboot
-            if (strcmp(token, "reboot") == 0)
+            if (strcmp(token[0], "reboot") == 0)
             {
                 knownCommand = true;
                 NVIC_APINT_R = NVIC_APINT_VECTKEY | NVIC_APINT_SYSRESETREQ;
@@ -256,7 +282,7 @@ void processShell()
                 putsUart0("Invalid command\n");
 
             // help
-            if (strcmp(token, "help") == 0)
+            if (strcmp(token[0], "help") == 0)
             {
                 putsUart0("Commands:\n");
                 putsUart0("  dc       i|q DC\n");
@@ -286,7 +312,8 @@ int main(void)
     initHw();
 
     //create lookup tables
-    for(int i = 0; i < 4096; i++)
+    uint8_t i;
+    for(i = 0; i < 4096; i++)
     {
         LUTA[i] = 2047 + 2047 * sin((i / 4096) * (2 * pi));
         LUTB[i] = 2047 + 2047 * sin((i / 4096) * (2 * pi));
