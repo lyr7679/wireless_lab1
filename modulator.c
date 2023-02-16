@@ -36,7 +36,7 @@
 #include "uart0.h"
 #include "wait.h"
 
-#define LDAC (*((volatile uint32_t *)(0x42000000 + (0x400043FC-0x40000000)*32 + 4*4)))
+//#define LDAC (*((volatile uint32_t *)(0x42000000 + (0x400043FC-0x40000000)*32 + 4*4)))
 
 #define MAX_CHARS 80
 
@@ -61,7 +61,9 @@ uint16_t LUTA[4096];
 uint16_t LUTB[4096];
 uint16_t index = 0;
 uint16_t DCValue = 0; //raw dc value from 0-4096, if zero means ac is on
-uint16_t ACValue = 0;
+uint16_t indexA = 0; //start at 0 to make sin
+uint16_t indexB = 1024; //start at 1024 to create cos
+
 bool DACA = true;
 //-----------------------------------------------------------------------------
 // EEPROM
@@ -114,16 +116,20 @@ void symbolTimerIsr()
     }
     else
     {
-        ACValue = 0;
-        if(index == 4096)
-            index = 0;
+        if(indexA >= 4096)
+            indexA = 0;
+        if(indexB >= 4096)
+            indexB = 0;
         setPinValue(LDAC, 1);
         setPinValue(SSI0FSS, 0);
-        writeSpi0Data();
+        writeSpi0Data(LUTA[indexA]);
+        writeSpi0Data(LUTB[indexB]);
         setPinValue(SSI0FSS, 1);
         setPinValue(LDAC, 0);
-        index++;
+        indexA++;
+        indexB++;
     }
+
 }
 
 //-----------------------------------------------------------------------------
@@ -139,6 +145,7 @@ void initHw()
     // Setup UART0 baud rate
     initUart0();
     setUart0BaudRate(115200, FCYC);
+    enablePort(PORTD); //enable for LDAC
 
     // Initialize SPI0
     initSpi0(USE_SSI0_FSS);
@@ -203,6 +210,7 @@ void processShell()
             {
                 knownCommand = true;
                 // add code to process command
+                DCValue = 0;
             }
 
             // tone FREQ [AMPL [PHASE [DC] ] ]
@@ -289,7 +297,9 @@ int main(void)
     for(int i = 0; i < 4096; i++)
     {
         LUTA[i] = 2047 + 2047 * sin((i / 4096) * (2 * pi));
+        LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN; //leave DC_WRITE_AB off to write to DACA
         LUTB[i] = 2047 + 2047 * sin((i / 4096) * (2 * pi));
+        LUTB[i] |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
     }
 
     // Randomize data set
