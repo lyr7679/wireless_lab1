@@ -60,15 +60,13 @@
 //-----------------------------------------------------------------------------
 // Global variables
 //-----------------------------------------------------------------------------
-uint16_t LUTA[4096];
-uint16_t LUTB[4096];
-uint16_t index = 0;
+uint16_t LUTA[4096]; //lookup table for DAC A
+uint16_t LUTB[4096]; //lookup table for DAC B
 uint16_t DCValueA = 2024; //raw dc value from 0-4096, if zero means ac is on
 uint16_t DCValueB = 4000; //raw dc value from 0-4096, if zero means ac is on
 uint16_t indexA = 0; //start at 0 to make sin
 uint16_t indexB = 1024; //start at 1024 to create cos
-
-bool DACA = true;
+bool AnotB = true; //if True output DAC A in isr, else DAC B
 //-----------------------------------------------------------------------------
 // EEPROM
 //-----------------------------------------------------------------------------
@@ -110,46 +108,54 @@ void initSymbolTimer(void)
 // Symbol timer called by timer 1
 void symbolTimerIsr()
 {
-    if(DCValueA != 0) //if dc is not 0, then ac
+    if(AnotB)
     {
-        setPinValue(SSI0FSS, 0);
-        writeSpi0Data(DCValueA);
-        setPinValue(SSI0FSS, 1);
-        waitMicrosecond(2);
-        setPinValue(LDAC, 0);
-        waitMicrosecond(2);
-        setPinValue(LDAC, 1);
+        if(DCValueA != 0) //if dc is not 0, then ac
+        {
+            setPinValue(SSI0FSS, 0);
+            writeSpi0Data(DCValueA);
+            setPinValue(SSI0FSS, 1);
+            waitMicrosecond(2);
+            setPinValue(LDAC, 0);
+            waitMicrosecond(2);
+            setPinValue(LDAC, 1);
+        }
+        else
+        {
+            if(indexA >= 4096)
+                indexA = 0;
+            setPinValue(LDAC, 1);
+            setPinValue(SSI0FSS, 0);
+            writeSpi0Data(LUTA[indexA]);
+            setPinValue(SSI0FSS, 1);
+            setPinValue(LDAC, 0);
+            indexA++;
+        }
+        //AnotB = false; //uncomment to test both dacs, rn only dac A
     }
     else
     {
-        if(indexA >= 4096)
-            indexA = 0;
-        setPinValue(LDAC, 1);
-        setPinValue(SSI0FSS, 0);
-        writeSpi0Data(LUTA[indexA]);
-        setPinValue(SSI0FSS, 1);
-        setPinValue(LDAC, 0);
-        indexA++;
+        if(DCValueB != 0) //means ac
+        {
+            setPinValue(LDAC, 1);
+            setPinValue(SSI0FSS, 0);
+            writeSpi0Data(DCValueB);
+            setPinValue(SSI0FSS, 1);
+            setPinValue(LDAC, 0);
+        }
+        else
+        {
+            if(indexB >= 4096)
+                indexB = 0;
+            setPinValue(LDAC, 1);
+            setPinValue(SSI0FSS, 0);
+            writeSpi0Data(LUTB[indexB]);
+            setPinValue(SSI0FSS, 1);
+            setPinValue(LDAC, 0);
+            indexB++;
+        }
+        //AnotB = true;
     }
-//    if(DCValueB != 0) //means ac
-//    {
-//        setPinValue(LDAC, 1);
-//        setPinValue(SSI0FSS, 0);
-//        writeSpi0Data(DCValueB);
-//        setPinValue(SSI0FSS, 1);
-//        setPinValue(LDAC, 0);
-//    }
-//    else
-//    {
-//        if(indexB >= 4096)
-//            indexB = 0;
-//        setPinValue(LDAC, 1);
-//        setPinValue(SSI0FSS, 0);
-//        writeSpi0Data(LUTB[indexB]);
-//        setPinValue(SSI0FSS, 1);
-//        setPinValue(LDAC, 0);
-//        indexB++;
-//    }
     TIMER1_ICR_R = TIMER_ICR_TATOCINT;
 }
 
@@ -265,10 +271,10 @@ void processShell()
                 knownCommand = true;
                 // add code to process command
                 aOrB = strtok(NULL, " ");
-//                if(aOrB[0] == 'a')
-//                    DCValueA = 0;
-//                else if(aOrB[0] == 'b')
-//                    DCValueB = 0;
+                if(aOrB[0] == 'a')
+                    DCValueA = 0;
+                else if(aOrB[0] == 'b')
+                    DCValueB = 0;
             }
 
             // tone FREQ [AMPL [PHASE [DC] ] ]
@@ -302,14 +308,13 @@ void processShell()
                 strDC = strtok(NULL, " ");
                 if(aOrB[0] == 'a')
                 {
-                    DCValueA += atoi(strDC); //value is now between 0 and 4095
+                    DCValueA += atoi(strDC); //value between 0 and 4095
                     DCValueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                 }
                 else if(aOrB[0] == 'b')
                 {
-                    DCValueB += atoi(strDC); //value is now between 0 and 4095
-                    DCValueB |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
-                    DCValueB |= DC_WRITE_AB;
+                    DCValueB += atoi(strDC); //value between 0 and 4095
+                    DCValueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
                 }
             }
 
