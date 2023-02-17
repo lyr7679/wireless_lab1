@@ -40,15 +40,15 @@
 
 #define MAX_CHARS 80
 
-#define FCYC 80e6
-#define FDAC 20e6
+#define FCYC 40e6
+#define FDAC 2e6
 #define FS 100000
 
 #define SSI0TX PORTA,5
 #define SSI0RX PORTA,4
 #define SSI0FSS PORTA,3
 #define SSI0CLK PORTA,2
-#define LDAC PORTD,6
+#define LDAC PORTB,3
 
 #define MAX_ARGS 5
 #define WHITESPACE " "
@@ -62,7 +62,7 @@
 //-----------------------------------------------------------------------------
 uint16_t LUTA[4096]; //lookup table for DAC A
 uint16_t LUTB[4096]; //lookup table for DAC B
-uint16_t DCValueA = 2024; //raw dc value from 0-4096, if zero means ac is on
+uint16_t DCValueA = 2048; //raw dc value from 0-4096, if zero means ac is on
 uint16_t DCValueB = 4000; //raw dc value from 0-4096, if zero means ac is on
 uint16_t indexA = 0; //start at 0 to make sin
 uint16_t indexB = 1024; //start at 1024 to create cos
@@ -110,15 +110,17 @@ void symbolTimerIsr()
 {
     if(AnotB)
     {
-        if(DCValueA != 0) //if dc is not 0, then ac
+        if(DCValueA != 0) //if dc is not 0, then dc
         {
             setPinValue(SSI0FSS, 0);
             writeSpi0Data(DCValueA);
+            readSpi0Data();
             setPinValue(SSI0FSS, 1);
             waitMicrosecond(2);
             setPinValue(LDAC, 0);
             waitMicrosecond(2);
             setPinValue(LDAC, 1);
+            //setPinValue(SSI0FSS, 1);
         }
         else
         {
@@ -128,7 +130,10 @@ void symbolTimerIsr()
             setPinValue(SSI0FSS, 0);
             writeSpi0Data(LUTA[indexA]);
             setPinValue(SSI0FSS, 1);
+            waitMicrosecond(2);
             setPinValue(LDAC, 0);
+            waitMicrosecond(2);
+            setPinValue(LDAC, 1);
             indexA++;
         }
         //AnotB = false; //uncomment to test both dacs, rn only dac A
@@ -172,17 +177,23 @@ void initHw()
     // Setup UART0 baud rate
     initUart0();
     setUart0BaudRate(115200, FCYC);
-    enablePort(PORTD); //enable for LDAC
+    enablePort(PORTB); //enable for LDAC
+
+    enablePort(PORTA);
 
     // Initialize SPI0
-    initSpi0(USE_SSI0_FSS);
+    initSpi0(USE_SSI0_RX);
     setSpi0BaudRate(FDAC, FCYC);
     setSpi0Mode(0, 0);
 
+    selectPinPushPullOutput(SSI0FSS);
+    selectPinPushPullOutput(LDAC);
+
     // Initialize symbol timer
-    initSymbolTimer();
+    //initSymbolTimer();
 
     setPinValue(SSI0FSS, 1);
+    setPinValue(LDAC, 1);
 
 }
 
@@ -359,6 +370,18 @@ int main(void)
     initHw();
 
     DCValueA |= DC_WRITE_GA | DC_WRITE_SHDN;
+
+    while(1)
+    {
+        setPinValue(SSI0FSS, 0);
+        writeSpi0Data(0x3FFF);
+        readSpi0Data();
+        setPinValue(SSI0FSS, 1);
+        waitMicrosecond(100);
+        setPinValue(LDAC, 0);
+        waitMicrosecond(100);
+        setPinValue(LDAC, 1);
+    }
 
     //create lookup tables
     uint32_t i;

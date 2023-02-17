@@ -59,11 +59,11 @@ void initSpi0(uint32_t pinMask)
         selectPinPushPullOutput(SSI0FSS);
         setPinAuxFunction(SSI0FSS, GPIO_PCTL_PA3_SSI0FSS);
     }
-    if (pinMask & USE_SSI0_RX)
-    {
-        selectPinDigitalInput(SSI0RX);
-        setPinAuxFunction(SSI0RX, GPIO_PCTL_PA4_SSI0RX);
-    }
+//    if (pinMask & USE_SSI0_RX)
+//    {
+//        selectPinDigitalInput(SSI0RX);
+//        setPinAuxFunction(SSI0RX, GPIO_PCTL_PA4_SSI0RX);
+//    }
 
     // Configure the SSI0 as a SPI master, mode 3, 8bit operation
     SSI0_CR1_R &= ~SSI_CR1_SSE;                        // turn off SSI to allow re-configuration
