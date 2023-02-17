@@ -63,8 +63,8 @@
 uint16_t LUTA[4096];
 uint16_t LUTB[4096];
 uint16_t index = 0;
-uint16_t DCValueA = 0; //raw dc value from 0-4096, if zero means ac is on
-uint16_t DCValueB = 0; //raw dc value from 0-4096, if zero means ac is on
+uint16_t DCValueA = 2024; //raw dc value from 0-4096, if zero means ac is on
+uint16_t DCValueB = 4000; //raw dc value from 0-4096, if zero means ac is on
 uint16_t indexA = 0; //start at 0 to make sin
 uint16_t indexB = 1024; //start at 1024 to create cos
 
@@ -110,13 +110,15 @@ void initSymbolTimer(void)
 // Symbol timer called by timer 1
 void symbolTimerIsr()
 {
-    if(DCValueA == 0) //means ac
+    if(DCValueA != 0) //if dc is not 0, then ac
     {
-        setPinValue(LDAC, 1);
         setPinValue(SSI0FSS, 0);
         writeSpi0Data(DCValueA);
         setPinValue(SSI0FSS, 1);
+        waitMicrosecond(2);
         setPinValue(LDAC, 0);
+        waitMicrosecond(2);
+        setPinValue(LDAC, 1);
     }
     else
     {
@@ -129,26 +131,26 @@ void symbolTimerIsr()
         setPinValue(LDAC, 0);
         indexA++;
     }
-    if(DCValueB == 0) //means ac
-    {
-        setPinValue(LDAC, 1);
-        setPinValue(SSI0FSS, 0);
-        writeSpi0Data(DCValueB);
-        setPinValue(SSI0FSS, 1);
-        setPinValue(LDAC, 0);
-    }
-    else
-    {
-        if(indexB >= 4096)
-            indexB = 0;
-        setPinValue(LDAC, 1);
-        setPinValue(SSI0FSS, 0);
-        writeSpi0Data(LUTB[indexB]);
-        setPinValue(SSI0FSS, 1);
-        setPinValue(LDAC, 0);
-        indexB++;
-    }
-
+//    if(DCValueB != 0) //means ac
+//    {
+//        setPinValue(LDAC, 1);
+//        setPinValue(SSI0FSS, 0);
+//        writeSpi0Data(DCValueB);
+//        setPinValue(SSI0FSS, 1);
+//        setPinValue(LDAC, 0);
+//    }
+//    else
+//    {
+//        if(indexB >= 4096)
+//            indexB = 0;
+//        setPinValue(LDAC, 1);
+//        setPinValue(SSI0FSS, 0);
+//        writeSpi0Data(LUTB[indexB]);
+//        setPinValue(SSI0FSS, 1);
+//        setPinValue(LDAC, 0);
+//        indexB++;
+//    }
+    TIMER1_ICR_R = TIMER_ICR_TATOCINT;
 }
 
 //-----------------------------------------------------------------------------
@@ -173,6 +175,8 @@ void initHw()
 
     // Initialize symbol timer
     initSymbolTimer();
+
+    setPinValue(SSI0FSS, 1);
 
 }
 
@@ -261,10 +265,10 @@ void processShell()
                 knownCommand = true;
                 // add code to process command
                 aOrB = strtok(NULL, " ");
-                if(aOrB[0] == 'a')
-                    DCValueA = 0;
-                else if(aOrB[0] == 'b')
-                    DCValueB = 0;
+//                if(aOrB[0] == 'a')
+//                    DCValueA = 0;
+//                else if(aOrB[0] == 'b')
+//                    DCValueB = 0;
             }
 
             // tone FREQ [AMPL [PHASE [DC] ] ]
@@ -349,8 +353,10 @@ int main(void)
     // Initialize hardware
     initHw();
 
+    DCValueA |= DC_WRITE_GA | DC_WRITE_SHDN;
+
     //create lookup tables
-    uint8_t i;
+    uint32_t i;
     for(i = 0; i < 4096; i++)
     {
         LUTA[i] = 2047 + 2047 * sin((i / 4096) * (2 * pi));
