@@ -108,8 +108,8 @@ void initSymbolTimer(void)
 // Symbol timer called by timer 1
 void symbolTimerIsr()
 {
-    //raw a 4095 -.491 -.468
-    //raw a 1 .534 .533
+    //raw a 4095 -.491 -.472
+    //raw a 1 .534 .530
     //raw b 4095 -.485
     //raw b 1 .533
     if(AnotB)
@@ -168,7 +168,7 @@ void symbolTimerIsr()
             setPinValue(LDAC, 0);
             _delay_cycles(3);
             setPinValue(LDAC, 1);
-            indexB++;
+            //indexB++;
         }
         AnotB = true;
     }
@@ -204,9 +204,9 @@ void initHw()
     uint32_t i;
     for(i = 0; i < 4096; i++)
     {
-        LUTA[i] = 1925 + 2000 * sin((i / 4096.0) * (2 * pi));
+        LUTA[i] = 2150 + 1850 * sin((i / 4096.0) * (2 * pi));
         LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN; //leave DC_WRITE_AB off to write to DACA
-        LUTB[i] = 2047 + 2047 * sin((i / 4096.0) * (2 * pi));
+        LUTB[i] = 2150 + 1900 * sin((i / 4096.0) * (2 * pi));
         LUTB[i] |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
     }
 
