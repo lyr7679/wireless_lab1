@@ -60,9 +60,10 @@ void setUart0BaudRate(uint32_t baudRate, uint32_t fcyc)
 {
     uint32_t divisorTimes128 = (fcyc * 8) / baudRate;   // calculate divisor (r) in units of 1/128,
                                                         // where r = fcyc / 16 * baudRate
+    divisorTimes128 += 1;                               // add 1/128 to allow rounding
     UART0_CTL_R = 0;                                    // turn-off UART0 to allow safe programming
     UART0_IBRD_R = divisorTimes128 >> 7;                // set integer value to floor(r)
-    UART0_FBRD_R = ((divisorTimes128 + 1) >> 1) & 63;   // set fractional value to round(fract(r)*64)
+    UART0_FBRD_R = ((divisorTimes128) >> 1) & 63;       // set fractional value to round(fract(r)*64)
     UART0_LCRH_R = UART_LCRH_WLEN_8 | UART_LCRH_FEN;    // configure for 8N1 w/ 16-level FIFO
     UART0_CTL_R = UART_CTL_TXE | UART_CTL_RXE | UART_CTL_UARTEN;
                                                         // turn-on UART0

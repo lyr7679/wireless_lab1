@@ -21,11 +21,14 @@
 #include "tm4c123gh6pm.h"
 #include "gpio.h"
 
+// Bit offset of the registers relative to bit 0 of DATA_R at 3FCh
+// reg offset x 4 bytes / reg x 8 bits / byte
 #define OFS_DATA_TO_DIR    1*4*8
 #define OFS_DATA_TO_IS     2*4*8
 #define OFS_DATA_TO_IBE    3*4*8
 #define OFS_DATA_TO_IEV    4*4*8
 #define OFS_DATA_TO_IM     5*4*8
+#define OFS_DATA_TO_IC     8*4*8
 #define OFS_DATA_TO_AFSEL  9*4*8
 #define OFS_DATA_TO_ODR   68*4*8
 #define OFS_DATA_TO_PUR   69*4*8
@@ -293,11 +296,25 @@ void disablePinInterrupt(PORT port, uint8_t pin)
     *p = 0;
 }
 
+void clearPinInterrupt(PORT port, uint8_t pin)
+{
+    uint32_t* p;
+    p = (uint32_t*)port + pin + OFS_DATA_TO_IC;
+    *p = 1;
+}
+
 void setPinValue(PORT port, uint8_t pin, bool value)
 {
     uint32_t* p;
     p = (uint32_t*)port + pin;
     *p = value;
+}
+
+void togglePinValue(PORT port, uint8_t pin)
+{
+    uint32_t* p;
+    p = (uint32_t*)port + pin;
+    *p ^= 1;
 }
 
 bool getPinValue(PORT port, uint8_t pin)

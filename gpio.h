@@ -22,7 +22,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Enum values set to bitband address of GPIO_PORTx_DATA_R register
+// Enum values set to bitband address of bit 0 of the GPIO_PORTx_DATA_R register
 typedef enum _PORT
 {
     PORTA = 0x42000000 + (0x400043FC-0x40000000)*32,
@@ -60,8 +60,10 @@ void selectPinInterruptHighLevel(PORT port, uint8_t pin);
 void selectPinInterruptLowLevel(PORT port, uint8_t pin);
 void enablePinInterrupt(PORT port, uint8_t pin);
 void disablePinInterrupt(PORT port, uint8_t pin);
+void clearPinInterrupt(PORT port, uint8_t pin);
 
 void setPinValue(PORT port, uint8_t pin, bool value);
+void togglePinValue(PORT port, uint8_t pin);
 bool getPinValue(PORT port, uint8_t pin);
 void setPortValue(PORT port, uint8_t value);
 uint8_t getPortValue(PORT port);

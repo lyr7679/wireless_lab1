@@ -11,7 +11,6 @@ wait.obj: C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/include/sys/_ty
 wait.obj: C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/include/machine/_types.h
 wait.obj: C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/include/machine/_stdint.h
 wait.obj: C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/include/sys/_stdint.h
-wait.obj: ../tm4c123gh6pm.h
 wait.obj: ../wait.h
 
 ../wait.c:
@@ -35,8 +34,6 @@ C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/include/machine/_types.h:
 C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/include/machine/_stdint.h:
 
 C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/include/sys/_stdint.h:
-
-../tm4c123gh6pm.h:
 
 ../wait.h:
 

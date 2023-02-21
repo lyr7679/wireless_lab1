@@ -11,7 +11,6 @@
 	<linkerCommandFile value="tm4c123gh6pm.cmd"/>
 	<rts value="libc.a"/>
 	<createSlaveProjects value=""/>
-	<templateProperties value="id=com.ti.common.project.core.emptyProjectWithMainTemplate"/>
-	<filesToOpen value="main.c"/>
-	<isTargetManual value="false"/>
+	<templateProperties value="id=com.ti.common.project.core.emptyProjectTemplate"/>
+	<filesToOpen value=""/>
 </projectOptions>

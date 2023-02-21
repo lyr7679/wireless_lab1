@@ -24,5 +24,6 @@
 //-----------------------------------------------------------------------------
 
 void initSystemClockTo40Mhz(void);
+void initSystemClockTo80Mhz(void);
 
 #endif

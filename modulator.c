@@ -48,7 +48,7 @@
 #define SSI0RX PORTA,4
 #define SSI0FSS PORTA,3
 #define SSI0CLK PORTA,2
-#define LDAC PORTB,3
+#define LDAC PORTB,4
 
 #define MAX_ARGS 5
 #define WHITESPACE " "
@@ -62,8 +62,8 @@
 //-----------------------------------------------------------------------------
 uint16_t LUTA[4096]; //lookup table for DAC A
 uint16_t LUTB[4096]; //lookup table for DAC B
-uint16_t DCValueA = 2048; //raw dc value from 0-4096, if zero means ac is on
-uint16_t DCValueB = 4000; //raw dc value from 0-4096, if zero means ac is on
+uint16_t DCValueA = 0; //raw dc value from 0-4096, if zero means ac is on
+uint16_t DCValueB = 0; //raw dc value from 0-4096, if zero means ac is on
 uint16_t indexA = 0; //start at 0 to make sin
 uint16_t indexB = 1024; //start at 1024 to create cos
 bool AnotB = true; //if True output DAC A in isr, else DAC B
@@ -108,58 +108,69 @@ void initSymbolTimer(void)
 // Symbol timer called by timer 1
 void symbolTimerIsr()
 {
+    //raw a 4095 -.491 -.468
+    //raw a 1 .534 .533
+    //raw b 4095 -.485
+    //raw b 1 .533
     if(AnotB)
     {
-        if(DCValueA != 0) //if dc is not 0, then dc
+        if(DCValueA & 0xFFF) //if dc is not 0, then dc
         {
             setPinValue(SSI0FSS, 0);
             writeSpi0Data(DCValueA);
             readSpi0Data();
             setPinValue(SSI0FSS, 1);
-            waitMicrosecond(2);
+            _delay_cycles(3);
             setPinValue(LDAC, 0);
-            waitMicrosecond(2);
+            _delay_cycles(3);
             setPinValue(LDAC, 1);
-            //setPinValue(SSI0FSS, 1);
         }
         else
         {
             if(indexA >= 4096)
                 indexA = 0;
-            setPinValue(LDAC, 1);
             setPinValue(SSI0FSS, 0);
+//            writeSpi0Data(LUTA[indexA]);
             writeSpi0Data(LUTA[indexA]);
+            readSpi0Data();
             setPinValue(SSI0FSS, 1);
-            waitMicrosecond(2);
+            _delay_cycles(3);
             setPinValue(LDAC, 0);
-            waitMicrosecond(2);
+            _delay_cycles(3);
             setPinValue(LDAC, 1);
-            indexA++;
+            //indexA++;
         }
-        //AnotB = false; //uncomment to test both dacs, rn only dac A
+        AnotB = false; //uncomment to test both dacs, rn only dac A
     }
     else
     {
-        if(DCValueB != 0) //means ac
+        if(DCValueB & 0xFFF) //if dc is not 0, then dc
         {
-            setPinValue(LDAC, 1);
             setPinValue(SSI0FSS, 0);
+            readSpi0Data();
             writeSpi0Data(DCValueB);
             setPinValue(SSI0FSS, 1);
+            _delay_cycles(3);
             setPinValue(LDAC, 0);
+            _delay_cycles(3);
+            setPinValue(LDAC, 1);
         }
         else
         {
             if(indexB >= 4096)
                 indexB = 0;
-            setPinValue(LDAC, 1);
             setPinValue(SSI0FSS, 0);
+//            writeSpi0Data(LUTB[indexB]);
             writeSpi0Data(LUTB[indexB]);
+            readSpi0Data();
             setPinValue(SSI0FSS, 1);
+            _delay_cycles(3);
             setPinValue(LDAC, 0);
+            _delay_cycles(3);
+            setPinValue(LDAC, 1);
             indexB++;
         }
-        //AnotB = true;
+        AnotB = true;
     }
     TIMER1_ICR_R = TIMER_ICR_TATOCINT;
 }
@@ -189,8 +200,18 @@ void initHw()
     selectPinPushPullOutput(SSI0FSS);
     selectPinPushPullOutput(LDAC);
 
+    //create LUT
+    uint32_t i;
+    for(i = 0; i < 4096; i++)
+    {
+        LUTA[i] = 1925 + 2000 * sin((i / 4096.0) * (2 * pi));
+        LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN; //leave DC_WRITE_AB off to write to DACA
+        LUTB[i] = 2047 + 2047 * sin((i / 4096.0) * (2 * pi));
+        LUTB[i] |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
+    }
+
     // Initialize symbol timer
-    //initSymbolTimer();
+    initSymbolTimer();
 
     setPinValue(SSI0FSS, 1);
     setPinValue(LDAC, 1);
@@ -231,10 +252,7 @@ void processShell()
     uint8_t token_count = 0;
     static uint8_t count = 0;
 
-    char* aOrB;
-    char* strDC;
     float DC = 0.0;
-    uint16_t total = 0;
 
     if (kbhitUart0())
     {
@@ -255,22 +273,32 @@ void processShell()
 
             token_count = tokenizeInput(strInput, token);
 
+            if (strcmp(token[0], "index") == 0)
+            {
+                knownCommand = true;
+                if(token[1][0] == 'a')
+                {
+                    indexA = atoi(token[2]);
+                }
+                else if(token[1][0] == 'b')
+                {
+                    indexB = atoi(token[2]);
+                }
+            }
+
             // dc a|b DC
             if (strcmp(token[0], "dc") == 0)
             {
                 knownCommand = true;
-
-                aOrB = strtok(NULL, " ");
-                strDC = strtok(NULL, " ");
-                DC = (float) atof(strDC) + .5; //get value between 0 and 1
-                if(aOrB[0] == 'a')
+                DC = atof(token[2]) + .5; //get value between 0 and 1
+                if(token[1][0] == 'a')
                 {
-                    DCValueA += DC * 4096; //value is now between 0 and 4095
+                    DCValueA = DC * 4096; //value is now between 0 and 4095
                     DCValueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                 }
-                else if(aOrB[0] == 'b')
+                else if(token[1][0] == 'b')
                 {
-                    DCValueB += DC * 4096; //value is now between 0 and 4095
+                    DCValueB = DC * 4096; //value is now between 0 and 4095
                     DCValueB |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                     DCValueB |= DC_WRITE_AB;
                 }
@@ -281,11 +309,6 @@ void processShell()
             {
                 knownCommand = true;
                 // add code to process command
-                aOrB = strtok(NULL, " ");
-                if(aOrB[0] == 'a')
-                    DCValueA = 0;
-                else if(aOrB[0] == 'b')
-                    DCValueB = 0;
             }
 
             // tone FREQ [AMPL [PHASE [DC] ] ]
@@ -314,17 +337,14 @@ void processShell()
             {
                 knownCommand = true;
                 // add code to process command
-
-                aOrB = strtok(NULL, " ");
-                strDC = strtok(NULL, " ");
-                if(aOrB[0] == 'a')
+                if(token[1][0] == 'a')
                 {
-                    DCValueA += atoi(strDC); //value between 0 and 4095
+                    DCValueA = atoi(token[2]); //value between 0 and 4095
                     DCValueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                 }
-                else if(aOrB[0] == 'b')
+                else if(token[1][0] == 'b')
                 {
-                    DCValueB += atoi(strDC); //value between 0 and 4095
+                    DCValueB = atoi(token[2]); //value between 0 and 4095
                     DCValueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
                 }
             }
@@ -368,30 +388,6 @@ int main(void)
 {
     // Initialize hardware
     initHw();
-
-    DCValueA |= DC_WRITE_GA | DC_WRITE_SHDN;
-
-    while(1)
-    {
-        setPinValue(SSI0FSS, 0);
-        writeSpi0Data(0x3FFF);
-        readSpi0Data();
-        setPinValue(SSI0FSS, 1);
-        waitMicrosecond(100);
-        setPinValue(LDAC, 0);
-        waitMicrosecond(100);
-        setPinValue(LDAC, 1);
-    }
-
-    //create lookup tables
-    uint32_t i;
-    for(i = 0; i < 4096; i++)
-    {
-        LUTA[i] = 2047 + 2047 * sin((i / 4096) * (2 * pi));
-        LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN; //leave DC_WRITE_AB off to write to DACA
-        LUTB[i] = 2047 + 2047 * sin((i / 4096) * (2 * pi));
-        LUTB[i] |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
-    }
 
     // Randomize data set
 

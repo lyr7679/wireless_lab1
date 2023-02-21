@@ -59,17 +59,17 @@ void initSpi0(uint32_t pinMask)
         selectPinPushPullOutput(SSI0FSS);
         setPinAuxFunction(SSI0FSS, GPIO_PCTL_PA3_SSI0FSS);
     }
-//    if (pinMask & USE_SSI0_RX)
-//    {
-//        selectPinDigitalInput(SSI0RX);
-//        setPinAuxFunction(SSI0RX, GPIO_PCTL_PA4_SSI0RX);
-//    }
+    if (pinMask & USE_SSI0_RX)
+    {
+        selectPinDigitalInput(SSI0RX);
+        setPinAuxFunction(SSI0RX, GPIO_PCTL_PA4_SSI0RX);
+    }
 
     // Configure the SSI0 as a SPI master, mode 3, 8bit operation
     SSI0_CR1_R &= ~SSI_CR1_SSE;                        // turn off SSI to allow re-configuration
     SSI0_CR1_R = 0;                                    // select master mode
     SSI0_CC_R = 0;                                     // select system clock as the clock source
-    SSI0_CR0_R = SSI_CR0_FRF_MOTO | SSI_CR0_DSS_8;     // set SR=0, 8-bit
+    SSI0_CR0_R = SSI_CR0_FRF_MOTO | SSI_CR0_DSS_16;    // set SR=0, 16-bit
 }
 
 // Set baud rate as function of instruction cycle frequency
