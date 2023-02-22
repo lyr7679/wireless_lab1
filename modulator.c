@@ -128,7 +128,7 @@ void symbolTimerIsr()
         else
         {
             if(indexA >= 4096)
-                indexA = 0;
+                indexA %= 4096;
             setPinValue(SSI0FSS, 0);
 //            writeSpi0Data(LUTA[indexA]);
             writeSpi0Data(LUTA[indexA]);
@@ -138,7 +138,7 @@ void symbolTimerIsr()
             setPinValue(LDAC, 0);
             _delay_cycles(3);
             setPinValue(LDAC, 1);
-            //indexA++;
+            indexA += 409;
         }
         AnotB = false; //uncomment to test both dacs, rn only dac A
     }
@@ -168,7 +168,7 @@ void symbolTimerIsr()
             setPinValue(LDAC, 0);
             _delay_cycles(3);
             setPinValue(LDAC, 1);
-            //indexB++;
+            indexB++;
         }
         AnotB = true;
     }
