@@ -67,6 +67,7 @@ uint16_t DCValueB = 0; //raw dc value from 0-4096, if zero means ac is on
 uint16_t indexA = 0; //start at 0 to make sin
 uint16_t indexB = 1024; //start at 1024 to create cos
 bool AnotB = true; //if True output DAC A in isr, else DAC B
+bool toneCommand = false;
 //-----------------------------------------------------------------------------
 // EEPROM
 //-----------------------------------------------------------------------------
@@ -82,6 +83,28 @@ bool AnotB = true; //if True output DAC A in isr, else DAC B
 //-----------------------------------------------------------------------------
 // Timer
 //-----------------------------------------------------------------------------
+void initLdacTimer(void)
+{
+    // Enable clocks
+    SYSCTL_RCGCTIMER_R |= SYSCTL_RCGCTIMER_R2;
+    _delay_cycles(3);
+
+    // Configure Timer 2
+    TIMER2_CTL_R &= ~TIMER_CTL_TAEN;                 // turn-off timer before reconfiguring
+    TIMER2_CFG_R = TIMER_CFG_32_BIT_TIMER;           // configure as 32-bit timer (A+B)
+    TIMER2_TAMR_R = TIMER_TAMR_TAMR_PERIOD;          // configure for periodic mode (count down)
+    TIMER2_TAILR_R = round(FCYC/FS);                 // set load value to match sample rate
+    TIMER2_IMR_R = TIMER_IMR_TATOIM;                 // turn-on interrupts for timeout in timer module
+    TIMER2_CTL_R |= TIMER_CTL_TAEN;                  // turn-on timer
+    enableNvicInterrupt(INT_TIMER2A);                // turn-on interrupt (TIMER2A) in NVIC
+}
+
+void ldacTimerIsr()
+{
+    setPinValue(LDAC, 0);
+    _delay_cycles(2);
+    setPinValue(LDAC, 1);
+}
 
 void setSymbolRate(float sampleRate)
 {
@@ -108,10 +131,6 @@ void initSymbolTimer(void)
 // Symbol timer called by timer 1
 void symbolTimerIsr()
 {
-    //raw a 4095 -.491 -.472
-    //raw a 1 .534 .530
-    //raw b 4095 -.485
-    //raw b 1 .533
     if(AnotB)
     {
         if(DCValueA & 0xFFF) //if dc is not 0, then dc
@@ -121,26 +140,26 @@ void symbolTimerIsr()
             readSpi0Data();
             setPinValue(SSI0FSS, 1);
             _delay_cycles(3);
-            setPinValue(LDAC, 0);
-            _delay_cycles(3);
-            setPinValue(LDAC, 1);
+//            setPinValue(LDAC, 0);
+//            _delay_cycles(3);
+//            setPinValue(LDAC, 1);
         }
         else
         {
             if(indexA >= 4096)
-                indexA = 0;
+                indexA %= 4096;
             setPinValue(SSI0FSS, 0);
-//            writeSpi0Data(LUTA[indexA]);
             writeSpi0Data(LUTA[indexA]);
             readSpi0Data();
             setPinValue(SSI0FSS, 1);
             _delay_cycles(3);
-            setPinValue(LDAC, 0);
-            _delay_cycles(3);
-            setPinValue(LDAC, 1);
-            //indexA++;
+//            setPinValue(LDAC, 0);
+//            _delay_cycles(3);
+//            setPinValue(LDAC, 1);
+            indexA += 409;
         }
-        AnotB = false; //uncomment to test both dacs, rn only dac A
+        if(toneCommand)
+            AnotB = false; //uncomment to test both dacs, rn only dac A
     }
     else
     {
@@ -151,26 +170,26 @@ void symbolTimerIsr()
             writeSpi0Data(DCValueB);
             setPinValue(SSI0FSS, 1);
             _delay_cycles(3);
-            setPinValue(LDAC, 0);
-            _delay_cycles(3);
-            setPinValue(LDAC, 1);
+//            setPinValue(LDAC, 0);
+//            _delay_cycles(3);
+//            setPinValue(LDAC, 1);
         }
         else
         {
             if(indexB >= 4096)
                 indexB = 0;
             setPinValue(SSI0FSS, 0);
-//            writeSpi0Data(LUTB[indexB]);
             writeSpi0Data(LUTB[indexB]);
             readSpi0Data();
             setPinValue(SSI0FSS, 1);
             _delay_cycles(3);
-            setPinValue(LDAC, 0);
-            _delay_cycles(3);
-            setPinValue(LDAC, 1);
-            //indexB++;
+//            setPinValue(LDAC, 0);
+//            _delay_cycles(3);
+//            setPinValue(LDAC, 1);
+            indexB++;
         }
-        AnotB = true;
+        if(toneCommand)
+            AnotB = true;
     }
     TIMER1_ICR_R = TIMER_ICR_TATOCINT;
 }
@@ -212,6 +231,7 @@ void initHw()
 
     // Initialize symbol timer
     initSymbolTimer();
+    initLdacTimer();
 
     setPinValue(SSI0FSS, 1);
     setPinValue(LDAC, 1);
@@ -245,6 +265,7 @@ uint8_t tokenizeInput(char *strInput, char *token_arr[])
 void processShell()
 {
     bool knownCommand = false;
+    toneCommand = false;
     bool end;
     char c;
     static char strInput[MAX_CHARS+1];
@@ -293,11 +314,13 @@ void processShell()
                 DC = atof(token[2]) + .5; //get value between 0 and 1
                 if(token[1][0] == 'a')
                 {
+                    AnotB = true;
                     DCValueA = DC * 4096; //value is now between 0 and 4095
                     DCValueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                 }
                 else if(token[1][0] == 'b')
                 {
+                    AnotB = false;
                     DCValueB = DC * 4096; //value is now between 0 and 4095
                     DCValueB |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                     DCValueB |= DC_WRITE_AB;
@@ -315,6 +338,7 @@ void processShell()
             if (strcmp(token[0], "tone") == 0)
             {
                 knownCommand = true;
+                toneCommand = true;
                 // add code to process command
             }
 
