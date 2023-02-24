@@ -153,9 +153,9 @@ void symbolTimerIsr()
             readSpi0Data();
             setPinValue(SSI0FSS, 1);
             _delay_cycles(3);
-//            setPinValue(LDAC, 0);
-//            _delay_cycles(3);
-//            setPinValue(LDAC, 1);
+            setPinValue(LDAC, 0);
+            _delay_cycles(3);
+            setPinValue(LDAC, 1);
             indexA += 409;
         }
         if(toneCommand)
@@ -183,9 +183,9 @@ void symbolTimerIsr()
             readSpi0Data();
             setPinValue(SSI0FSS, 1);
             _delay_cycles(3);
-//            setPinValue(LDAC, 0);
-//            _delay_cycles(3);
-//            setPinValue(LDAC, 1);
+            setPinValue(LDAC, 0);
+            _delay_cycles(3);
+            setPinValue(LDAC, 1);
             indexB++;
         }
         if(toneCommand)
