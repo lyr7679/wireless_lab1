@@ -56,7 +56,9 @@
 #define DC_WRITE_AB   0x8000
 #define DC_WRITE_GA   0x2000
 #define DC_WRITE_SHDN 0x1000
+
 #define pi 3.14159265
+#define GAINI 1850
 //-----------------------------------------------------------------------------
 // Global variables
 //-----------------------------------------------------------------------------
@@ -64,10 +66,12 @@ uint16_t LUTA[4096]; //lookup table for DAC A
 uint16_t LUTB[4096]; //lookup table for DAC B
 uint16_t DCValueA = 0; //raw dc value from 0-4096, if zero means ac is on
 uint16_t DCValueB = 0; //raw dc value from 0-4096, if zero means ac is on
-uint16_t indexA = 0; //start at 0 to make sin
+uint32_t indexA = 0; //start at 0 to make sin
 uint16_t indexB = 1024; //start at 1024 to create cos
 bool AnotB = true; //if True output DAC A in isr, else DAC B
-bool toneCommand = false;
+bool toneCommand = true;
+
+static uint32_t phaseShift = (int) ((4294967296 / FS) * 10000);
 //-----------------------------------------------------------------------------
 // EEPROM
 //-----------------------------------------------------------------------------
@@ -131,66 +135,66 @@ void initSymbolTimer(void)
 // Symbol timer called by timer 1
 void symbolTimerIsr()
 {
-    if(AnotB)
-    {
-        if(DCValueA & 0xFFF) //if dc is not 0, then dc
-        {
-            setPinValue(SSI0FSS, 0);
-            writeSpi0Data(DCValueA);
-            readSpi0Data();
-            setPinValue(SSI0FSS, 1);
-            _delay_cycles(3);
-//            setPinValue(LDAC, 0);
-//            _delay_cycles(3);
-//            setPinValue(LDAC, 1);
-        }
-        else
-        {
-            if(indexA >= 4096)
-                indexA %= 4096;
-            setPinValue(SSI0FSS, 0);
-            writeSpi0Data(LUTA[indexA]);
-            readSpi0Data();
-            setPinValue(SSI0FSS, 1);
-            _delay_cycles(3);
-            setPinValue(LDAC, 0);
-            _delay_cycles(3);
-            setPinValue(LDAC, 1);
-            indexA += 409;
-        }
-        if(toneCommand)
-            AnotB = false; //uncomment to test both dacs, rn only dac A
-    }
-    else
-    {
-        if(DCValueB & 0xFFF) //if dc is not 0, then dc
-        {
-            setPinValue(SSI0FSS, 0);
-            readSpi0Data();
-            writeSpi0Data(DCValueB);
-            setPinValue(SSI0FSS, 1);
-            _delay_cycles(3);
-//            setPinValue(LDAC, 0);
-//            _delay_cycles(3);
-//            setPinValue(LDAC, 1);
-        }
-        else
-        {
-            if(indexB >= 4096)
-                indexB = 0;
-            setPinValue(SSI0FSS, 0);
-            writeSpi0Data(LUTB[indexB]);
-            readSpi0Data();
-            setPinValue(SSI0FSS, 1);
-            _delay_cycles(3);
-            setPinValue(LDAC, 0);
-            _delay_cycles(3);
-            setPinValue(LDAC, 1);
-            indexB++;
-        }
-        if(toneCommand)
-            AnotB = true;
-    }
+//    if(AnotB)
+//    {
+//        if(DCValueA & 0xFFF) //if dc is not 0, then dc
+//        {
+//            setPinValue(SSI0FSS, 0);
+//            writeSpi0Data(DCValueA);
+//            readSpi0Data();
+//            setPinValue(SSI0FSS, 1);
+//        }
+//        else
+//        {
+//            if(indexA >= 4096)
+//                indexA %= 4096;
+//            setPinValue(SSI0FSS, 0);
+//            writeSpi0Data(LUTA[indexA]);
+//            readSpi0Data();
+//            setPinValue(SSI0FSS, 1);
+//            //indexA += 580;
+//            indexA += ((pow(2, 32) / FS) * 10000);
+//        }
+//        //if(toneCommand)
+//            AnotB = false; //uncomment to test both dacs, rn only dac A
+//    }
+//    else
+//    {
+//        if(DCValueB & 0xFFF) //if dc is not 0, then dc
+//        {
+//            setPinValue(SSI0FSS, 0);
+//            readSpi0Data();
+//            writeSpi0Data(DCValueB);
+//            setPinValue(SSI0FSS, 1);
+//        }
+//        else
+//        {
+//            if(indexB >= 4096)
+//                indexB = 0;
+//            setPinValue(SSI0FSS, 0);
+//            writeSpi0Data(LUTB[indexB]);
+//            readSpi0Data();
+//            setPinValue(SSI0FSS, 1);
+//            //indexB += 580;
+//            indexB += (pow(2, 32) / FS) * 10000;
+//        }
+//        //if(toneCommand)
+//            AnotB = true;
+
+//    uint32_t temp;
+//    temp = indexA >> 20;
+    setPinValue(LDAC, 0);
+    _delay_cycles(3);
+    setPinValue(LDAC, 1);
+    SSI0_DR_R = LUTA[indexA >> 20];
+    //SSI0_DR_R = LUTA[3000];
+    SSI0_DR_R = LUTB[indexA >> 20];
+
+//    if(indexA > 4096)
+//        indexA = 0;
+    indexA += phaseShift;
+
+
     TIMER1_ICR_R = TIMER_ICR_TATOCINT;
 }
 
@@ -231,7 +235,7 @@ void initHw()
 
     // Initialize symbol timer
     initSymbolTimer();
-    initLdacTimer();
+    //initLdacTimer();
 
     setPinValue(SSI0FSS, 1);
     setPinValue(LDAC, 1);
@@ -414,7 +418,7 @@ int main(void)
     initHw();
 
     // Randomize data set
-
+    //phaseShift = (int) ((pow(2, 32) / FS) * 10000);
     // Greeting
     putsUart0("CSE 4377/5377 Modulator\n");
 
