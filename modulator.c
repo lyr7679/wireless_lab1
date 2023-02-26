@@ -59,6 +59,36 @@
 
 #define pi 3.14159265
 #define GAINI 1850
+#define GAINQ 1900
+
+uint32_t bpskI[2] = {GAINI,
+                    -GAINI};
+uint32_t bpskQ[2] = {0,
+                     0};
+
+uint32_t bpskI[2] = {GAINI,
+                    -GAINI};
+uint32_t bpskQ[2] = {GAINQ,
+                    -GAINQ};
+
+uint32_t psk8I[8] = {GAINI * 1,
+                     GAINI * .71,
+                    -GAINI * .71,
+                     GAINI * 0,
+                     GAINI * .71,
+                    -GAINI * 0,
+                    -GAINI * 1,
+                    -GAINI * .71
+                    };
+uint32_t psk8I[8] = {GAINQ * 0,
+                     GAINQ * .71,
+                    -GAINQ * .71,
+                     GAINQ * 1,
+                     GAINQ * .71,
+                    -GAINQ * 1,
+                    -GAINQ * 0,
+                    -GAINQ * .71
+                    };
 //-----------------------------------------------------------------------------
 // Global variables
 //-----------------------------------------------------------------------------
