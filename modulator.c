@@ -66,9 +66,9 @@ uint32_t bpskI[2] = {GAINI,
 uint32_t bpskQ[2] = {0,
                      0};
 
-uint32_t bpskI[2] = {GAINI,
+uint32_t qpskI[2] = {GAINI,
                     -GAINI};
-uint32_t bpskQ[2] = {GAINQ,
+uint32_t qpskQ[2] = {GAINQ,
                     -GAINQ};
 
 uint32_t psk8I[8] = {GAINI * 1,
@@ -80,7 +80,7 @@ uint32_t psk8I[8] = {GAINI * 1,
                     -GAINI * 1,
                     -GAINI * .71
                     };
-uint32_t psk8I[8] = {GAINQ * 0,
+uint32_t psk8Q[8] = {GAINQ * 0,
                      GAINQ * .71,
                     -GAINQ * .71,
                      GAINQ * 1,
@@ -97,8 +97,8 @@ uint16_t LUTB[4096]; //lookup table for DAC B
 uint16_t DCValueA = 0; //raw dc value from 0-4096, if zero means ac is on
 uint16_t DCValueB = 0; //raw dc value from 0-4096, if zero means ac is on
 uint32_t indexA = 0; //start at 0 to make sin
-uint16_t indexB = 1024; //start at 1024 to create cos
-bool AnotB = true; //if True output DAC A in isr, else DAC B
+uint32_t indexB = 0; //start at 1024 to create cos
+uint8_t AnotB = 1; //if True output DAC A in isr, else DAC B
 bool toneCommand = true;
 
 static uint32_t phaseShift = (int) ((4294967296 / FS) * 10000);
@@ -165,65 +165,22 @@ void initSymbolTimer(void)
 // Symbol timer called by timer 1
 void symbolTimerIsr()
 {
-//    if(AnotB)
-//    {
-//        if(DCValueA & 0xFFF) //if dc is not 0, then dc
-//        {
-//            setPinValue(SSI0FSS, 0);
-//            writeSpi0Data(DCValueA);
-//            readSpi0Data();
-//            setPinValue(SSI0FSS, 1);
-//        }
-//        else
-//        {
-//            if(indexA >= 4096)
-//                indexA %= 4096;
-//            setPinValue(SSI0FSS, 0);
-//            writeSpi0Data(LUTA[indexA]);
-//            readSpi0Data();
-//            setPinValue(SSI0FSS, 1);
-//            //indexA += 580;
-//            indexA += ((pow(2, 32) / FS) * 10000);
-//        }
-//        //if(toneCommand)
-//            AnotB = false; //uncomment to test both dacs, rn only dac A
-//    }
-//    else
-//    {
-//        if(DCValueB & 0xFFF) //if dc is not 0, then dc
-//        {
-//            setPinValue(SSI0FSS, 0);
-//            readSpi0Data();
-//            writeSpi0Data(DCValueB);
-//            setPinValue(SSI0FSS, 1);
-//        }
-//        else
-//        {
-//            if(indexB >= 4096)
-//                indexB = 0;
-//            setPinValue(SSI0FSS, 0);
-//            writeSpi0Data(LUTB[indexB]);
-//            readSpi0Data();
-//            setPinValue(SSI0FSS, 1);
-//            //indexB += 580;
-//            indexB += (pow(2, 32) / FS) * 10000;
-//        }
-//        //if(toneCommand)
-//            AnotB = true;
-
-//    uint32_t temp;
-//    temp = indexA >> 20;
     setPinValue(LDAC, 0);
-    _delay_cycles(3);
     setPinValue(LDAC, 1);
-    SSI0_DR_R = LUTA[indexA >> 20];
-    //SSI0_DR_R = LUTA[3000];
-    SSI0_DR_R = LUTB[indexA >> 20];
 
-//    if(indexA > 4096)
-//        indexA = 0;
-    indexA += phaseShift;
-
+    //if(AnotB)
+    {
+        SSI0_DR_R = LUTA[indexA >> 20];
+        indexA += (phaseShift);
+        //indexA %= 4096;
+    }
+    //else
+    {
+        SSI0_DR_R = LUTB[indexB >> 20];
+        indexB += (phaseShift);
+        //indexB %= 4096;
+    }
+    AnotB ^= 1;
 
     TIMER1_ICR_R = TIMER_ICR_TATOCINT;
 }
@@ -246,7 +203,7 @@ void initHw()
     enablePort(PORTA);
 
     // Initialize SPI0
-    initSpi0(USE_SSI0_RX);
+    initSpi0(USE_SSI0_FSS);
     setSpi0BaudRate(FDAC, FCYC);
     setSpi0Mode(0, 0);
 
@@ -257,9 +214,11 @@ void initHw()
     uint32_t i;
     for(i = 0; i < 4096; i++)
     {
-        LUTA[i] = 2150 + 1850 * sin((i / 4096.0) * (2 * pi));
-        LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN; //leave DC_WRITE_AB off to write to DACA
-        LUTB[i] = 2150 + 1900 * sin((i / 4096.0) * (2 * pi));
+//        LUTA[i] = 2150 + 1850 * sin((i / 4096.0) * (2 * pi));
+//        LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN; //leave DC_WRITE_AB off to write to DACA
+        LUTA[i] = 2150 + 1900 * sin((i / 4096.0) * (2 * pi));
+        LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN;
+        LUTB[i] = 2150 + 1900 * cos((i / 4096.0) * (2 * pi));
         LUTB[i] |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
     }
 
@@ -267,7 +226,7 @@ void initHw()
     initSymbolTimer();
     //initLdacTimer();
 
-    setPinValue(SSI0FSS, 1);
+    //setPinValue(SSI0FSS, 0);
     setPinValue(LDAC, 1);
 
 }
