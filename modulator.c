@@ -100,8 +100,10 @@ uint32_t indexA = 0; //start at 0 to make sin
 uint32_t indexB = 0; //start at 1024 to create cos
 uint8_t AnotB = 1; //if True output DAC A in isr, else DAC B
 bool toneCommand = true;
+float amplitude = .5;
+uint32_t degreeShift = 0;
 
-static uint32_t phaseShift = (int) ((4294967296 / FS) * 10000);
+uint32_t phaseShift = (int) ((4294967296 / FS) * 10000);
 //-----------------------------------------------------------------------------
 // EEPROM
 //-----------------------------------------------------------------------------
@@ -168,19 +170,20 @@ void symbolTimerIsr()
     setPinValue(LDAC, 0);
     setPinValue(LDAC, 1);
 
-    //if(AnotB)
+    if(AnotB)
     {
         SSI0_DR_R = LUTA[indexA >> 20];
         indexA += (phaseShift);
         //indexA %= 4096;
     }
-    //else
+    else
     {
         SSI0_DR_R = LUTB[indexB >> 20];
         indexB += (phaseShift);
         //indexB %= 4096;
     }
-    AnotB ^= 1;
+    if(toneCommand)
+        AnotB ^= 1;
 
     TIMER1_ICR_R = TIMER_ICR_TATOCINT;
 }
@@ -324,7 +327,31 @@ void processShell()
             if (strcmp(token[0], "sine") == 0)
             {
                 knownCommand = true;
+                token_count--;
                 // add code to process command
+                if(token_count)
+                {
+                    if(token[1][0] == 'a')
+                        AnotB = 1;
+                    else
+                        AnotB = 0;
+                    token_count--;
+                }
+                if(token_count)
+                {
+                    phaseShift = (int) ((4294967296 / FS) * atoi(token[2]));
+                    token_count--;
+                }
+                if(token_count)
+                {
+                    amplitude = atof(token[3]);
+                    token_count--;
+                }
+                if(token_count)
+                {
+                    phaseDegree = atoi(token[4]);
+                    token_count--;
+                }
             }
 
             // tone FREQ [AMPL [PHASE [DC] ] ]
