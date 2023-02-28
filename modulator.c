@@ -40,9 +40,9 @@
 
 #define MAX_CHARS 80
 
-#define FCYC 20e6
-#define FDAC 2e6
-#define FS 100000
+#define FCYC 80e6
+#define FDAC 20e6
+#define FS 500000
 
 #define SSI0TX PORTA,5
 #define SSI0RX PORTA,4
@@ -193,7 +193,7 @@ void symbolTimerIsr()
 void initHw()
 {
     // Initialize system clock to 40 MHz
-    initSystemClockTo40Mhz();
+    initSystemClockTo80Mhz();
 
     // Setup UART0 baud rate
     initUart0();
