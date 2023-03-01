@@ -58,7 +58,7 @@
 #define DC_WRITE_SHDN 0x1000
 
 #define pi 3.14159265
-#define GAINI 1850
+#define GAINI 1900
 #define GAINQ 1900
 
 uint32_t bpskI[2] = {GAINI,
@@ -94,11 +94,12 @@ uint32_t psk8Q[8] = {GAINQ * 0,
 //-----------------------------------------------------------------------------
 uint16_t LUTA[4096]; //lookup table for DAC A
 uint16_t LUTB[4096]; //lookup table for DAC B
-uint16_t DCValueA = 0; //raw dc value from 0-4096, if zero means ac is on
-uint16_t DCValueB = 0; //raw dc value from 0-4096, if zero means ac is on
+uint16_t valueA = 0; //raw dc value from 0-4096, if zero means ac is on
+uint16_t valueB = 0; //raw dc value from 0-4096, if zero means ac is on
 uint32_t indexA = 0; //start at 0 to make sin
 uint32_t indexB = 0; //start at 1024 to create cos
 uint8_t AnotB = 1; //if True output DAC A in isr, else DAC B
+bool DC = false;
 bool toneCommand = true;
 float amplitude = .5;
 uint32_t degreeShift = 0;
@@ -172,13 +173,23 @@ void symbolTimerIsr()
 
     if(AnotB)
     {
-        SSI0_DR_R = LUTA[indexA >> 20];
+        if(!DC)
+        {
+            valueA = LUTA[indexA >> 20];
+            valueA |= DC_WRITE_GA | DC_WRITE_SHDN;
+        }
+        SSI0_DR_R = valueA;
         indexA += (phaseShift);
         //indexA %= 4096;
     }
     else
     {
-        SSI0_DR_R = LUTB[indexB >> 20];
+        if(!DC)
+        {
+            valueB = LUTB[indexB >> 20];
+            valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
+        }
+        SSI0_DR_R = valueB;
         indexB += (phaseShift);
         //indexB %= 4096;
     }
@@ -220,9 +231,9 @@ void initHw()
 //        LUTA[i] = 2150 + 1850 * sin((i / 4096.0) * (2 * pi));
 //        LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN; //leave DC_WRITE_AB off to write to DACA
         LUTA[i] = 2150 + 1900 * sin((i / 4096.0) * (2 * pi));
-        LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN;
+        //LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN;
         LUTB[i] = 2150 + 1900 * cos((i / 4096.0) * (2 * pi));
-        LUTB[i] |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
+        //LUTB[i] |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
     }
 
     // Initialize symbol timer
@@ -261,15 +272,13 @@ uint8_t tokenizeInput(char *strInput, char *token_arr[])
 void processShell()
 {
     bool knownCommand = false;
-    toneCommand = false;
+    //toneCommand = false;
     bool end;
     char c;
     static char strInput[MAX_CHARS+1];
     char* token[MAX_ARGS];
     uint8_t token_count = 0;
     static uint8_t count = 0;
-
-    float DC = 0.0;
 
     if (kbhitUart0())
     {
@@ -286,7 +295,6 @@ void processShell()
         {
             strInput[count] = '\0';
             count = 0;
-            //token = strtok(strInput, " ");
 
             token_count = tokenizeInput(strInput, token);
 
@@ -307,19 +315,17 @@ void processShell()
             if (strcmp(token[0], "dc") == 0)
             {
                 knownCommand = true;
-                DC = atof(token[2]) + .5; //get value between 0 and 1
                 if(token[1][0] == 'a')
                 {
                     AnotB = true;
-                    DCValueA = DC * 4096; //value is now between 0 and 4095
-                    DCValueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
+                    valueA = (atof(token[2]) + .5) * 4096; //get value between 0 and 1
+                    valueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                 }
                 else if(token[1][0] == 'b')
                 {
                     AnotB = false;
-                    DCValueB = DC * 4096; //value is now between 0 and 4095
-                    DCValueB |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
-                    DCValueB |= DC_WRITE_AB;
+                    valueB = (atof(token[2]) + .5) * 4096; //get value between 0 and 1
+                    valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
                 }
             }
 
@@ -383,13 +389,13 @@ void processShell()
                 // add code to process command
                 if(token[1][0] == 'a')
                 {
-                    DCValueA = atoi(token[2]); //value between 0 and 4095
-                    DCValueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
+                    valueA = atoi(token[2]); //value between 0 and 4095
+                    valueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                 }
                 else if(token[1][0] == 'b')
                 {
-                    DCValueB = atoi(token[2]); //value between 0 and 4095
-                    DCValueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
+                    valueB = atoi(token[2]); //value between 0 and 4095
+                    valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
                 }
             }
 
