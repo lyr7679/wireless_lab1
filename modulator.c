@@ -179,7 +179,10 @@ void symbolTimerIsr()
             valueA |= DC_WRITE_GA | DC_WRITE_SHDN;
         }
         SSI0_DR_R = valueA;
-        indexA += (phaseShift);
+        if(toneCommand)
+            indexA += phaseShift;
+        else
+            indexA += (phaseShift / 2);
         //indexA %= 4096;
     }
     else
@@ -190,7 +193,10 @@ void symbolTimerIsr()
             valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
         }
         SSI0_DR_R = valueB;
-        indexB += (phaseShift);
+        if(toneCommand)
+            indexB += phaseShift;
+        else
+            indexB += (phaseShift / 2);
         //indexB %= 4096;
     }
     if(toneCommand)
@@ -355,7 +361,7 @@ void processShell()
                 }
                 if(token_count)
                 {
-                    phaseDegree = atoi(token[4]);
+                    degreeShift = atoi(token[4]);
                     token_count--;
                 }
             }
@@ -373,6 +379,7 @@ void processShell()
             {
                 knownCommand = true;
                 // add code to process command
+                
             }
 
             // filter FILTER
