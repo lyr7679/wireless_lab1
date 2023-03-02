@@ -71,14 +71,14 @@ uint32_t qpskI[2] = {GAINI,
 uint32_t qpskQ[2] = {GAINQ,
                     -GAINQ};
 
-uint32_t psk8I[8] = {GAINI * 1,
-                     GAINI * .71,
-                    -GAINI * .71,
-                     GAINI * 0,
-                     GAINI * .71,
-                    -GAINI * 0,
-                    -GAINI * 1,
-                    -GAINI * .71
+uint32_t psk8I[8] = {GAINI * 1,     ///000 -> 0
+                     GAINI * .71,   ///001 -> 45
+                    -GAINI * .71,   ///010 -> 135
+                     GAINI * 0,     ///011 -> 90
+                     GAINI * .71,   ///100 -> 315
+                    -GAINI * 0,     ///101 -> 270
+                    -GAINI * 1,     ///110 -> 180
+                    -GAINI * .71    ///111 -> 225
                     };
 uint32_t psk8Q[8] = {GAINQ * 0,
                      GAINQ * .71,
@@ -103,6 +103,7 @@ bool DC = false;
 bool toneCommand = true;
 float amplitude = .5;
 uint32_t degreeShift = 0;
+char modStr[3] = "abc";
 
 uint32_t phaseShift = (int) ((4294967296 / FS) * 10000);
 //-----------------------------------------------------------------------------
@@ -321,6 +322,8 @@ void processShell()
             if (strcmp(token[0], "dc") == 0)
             {
                 knownCommand = true;
+                DC = true;
+                toneCommand = false;
                 if(token[1][0] == 'a')
                 {
                     AnotB = true;
@@ -339,6 +342,8 @@ void processShell()
             if (strcmp(token[0], "sine") == 0)
             {
                 knownCommand = true;
+                DC = false;
+                toneCommand = false;
                 token_count--;
                 // add code to process command
                 if(token_count)
@@ -371,6 +376,7 @@ void processShell()
             {
                 knownCommand = true;
                 toneCommand = true;
+                DC = false;
                 // add code to process command
             }
 
@@ -378,6 +384,7 @@ void processShell()
             if (strcmp(token[0], "mod") == 0)
             {
                 knownCommand = true;
+                toneCommand = true;
                 // add code to process command
                 
             }
@@ -393,6 +400,8 @@ void processShell()
             if (strcmp(token[0], "raw") == 0)
             {
                 knownCommand = true;
+                toneCommand = false;
+                DC = true;
                 // add code to process command
                 if(token[1][0] == 'a')
                 {
