@@ -106,7 +106,7 @@ uint32_t degreeShift = 0;
 //mod variables
 uint32_t bitsToParse = 342391;
 uint8_t shiftBy = 3;
-uint8_t modIndex = 0;
+int modIndex = 23;
 bool isMod = true;
 uint32_t modTemp = 0;
 uint32_t index = 0;
@@ -181,14 +181,15 @@ void symbolTimerIsr()
 
     if(isMod)
     {
-            index = bitsToParse & (modMask << (modIndex - shiftBy));
-            index = index >> (modIndex - shiftBy);
+        if(modIndex < 0)
+            modIndex = 23;
+            index = bitsToParse & (modMask << ((modIndex + 1) - shiftBy));
+            index = index >> ((modIndex + 1) - shiftBy);
             modTemp = psk8I[index] | DC_WRITE_SHDN | DC_WRITE_GA;
             SSI0_DR_R = modTemp;
             modTemp = psk8Q[index] | DC_WRITE_SHDN | DC_WRITE_GA | DC_WRITE_AB;
             SSI0_DR_R = modTemp;
             modIndex -= shiftBy;
-            modIndex %= 24;
     }
     else
     {
