@@ -103,6 +103,15 @@ bool toneCommand = true;
 float amplitude = .5;
 uint32_t degreeShift = 0;
 
+//mod variables
+uint32_t bitsToParse = 342391;
+uint8_t shiftBy = 3;
+uint8_t modIndex = 0;
+bool isMod = true;
+uint32_t modTemp = 0;
+uint32_t index = 0;
+uint32_t modMask = 7;
+
 uint32_t phaseShift = (int) ((4294967296 / FS) * 10000);
 //-----------------------------------------------------------------------------
 // EEPROM
@@ -170,17 +179,31 @@ void symbolTimerIsr()
     setPinValue(LDAC, 0);
     setPinValue(LDAC, 1);
 
-    if(AnotB)
+    if(isMod)
     {
-        SSI0_DR_R = LUTA[indexA >> 20];
-        indexA += (phaseShift);
-        //indexA %= 4096;
+            index = bitsToParse & (modMask << (modIndex - shiftBy));
+            index = index >> (modIndex - shiftBy);
+            modTemp = psk8I[index] | DC_WRITE_SHDN | DC_WRITE_GA;
+            SSI0_DR_R = modTemp;
+            modTemp = psk8Q[index] | DC_WRITE_SHDN | DC_WRITE_GA | DC_WRITE_AB;
+            SSI0_DR_R = modTemp;
+            modIndex -= shiftBy;
+            modIndex %= 24;
     }
     else
     {
-        SSI0_DR_R = LUTB[indexB >> 20];
-        indexB += (phaseShift);
-        //indexB %= 4096;
+        if(AnotB)
+        {
+            SSI0_DR_R = LUTA[indexA >> 20];
+            indexA += (phaseShift);
+            //indexA %= 4096;
+        }
+        else
+        {
+            SSI0_DR_R = LUTB[indexB >> 20];
+            indexB += (phaseShift);
+            //indexB %= 4096;
+        }
     }
     if(toneCommand)
         AnotB ^= 1;
@@ -318,8 +341,7 @@ void processShell()
                 {
                     AnotB = false;
                     DCValueB = DC * 4096; //value is now between 0 and 4095
-                    DCValueB |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
-                    DCValueB |= DC_WRITE_AB;
+                    DCValueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
                 }
             }
 
@@ -349,7 +371,7 @@ void processShell()
                 }
                 if(token_count)
                 {
-                    phaseDegree = atoi(token[4]);
+                    degreeShift = atoi(token[4]);
                     token_count--;
                 }
             }
@@ -366,6 +388,7 @@ void processShell()
             if (strcmp(token[0], "mod") == 0)
             {
                 knownCommand = true;
+
                 // add code to process command
             }
 
