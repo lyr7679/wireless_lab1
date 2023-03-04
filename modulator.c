@@ -302,13 +302,21 @@ void initHw()
     uint32_t i;
     for(i = 0; i < 4096; i++)
     {
-//        LUTA[i] = 2150 + 1850 * sin((i / 4096.0) * (2 * pi));
-//        LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN; //leave DC_WRITE_AB off to write to DACA
         LUTA[i] = 2150 + 1900 * sin((i / 4096.0) * (2 * pi));
         LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN;
         LUTB[i] = 2150 + 1900 * sin((i / 4096.0) * (2 * pi));
         LUTB[i] |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
     }
+
+    pskI[0] = bpskI;
+    pskI[1] = qpskI;
+    pskI[2] = psk8I;
+    pskI[3] = qam16I;
+
+    pskQ[0] = bpskQ;
+    pskQ[1] = qpskQ;
+    pskQ[2] = psk8Q;
+    pskQ[3] = qam16Q;
 
     // Initialize symbol timer
     initSymbolTimer();
@@ -581,16 +589,6 @@ int main(void)
     //phaseShift = (int) ((pow(2, 32) / FS) * 10000);
     // Greeting
     putsUart0("CSE 4377/5377 Modulator\n");
-
-    pskI[0] = bpskI;
-    pskI[1] = qpskI;
-    pskI[2] = psk8I;
-    pskI[3] = qam16I;
-
-    pskQ[0] = bpskQ;
-    pskQ[1] = qpskQ;
-    pskQ[2] = psk8Q;
-    pskQ[3] = qam16Q;
 
     // Main Loop
     while (true)
