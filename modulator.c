@@ -42,7 +42,7 @@
 
 #define FCYC 80e6
 #define FDAC 20e6
-#define FS 500000
+#define FS 350000
 
 #define SSI0TX PORTA,5
 #define SSI0RX PORTA,4
@@ -58,17 +58,24 @@
 #define DC_WRITE_SHDN 0x1000
 
 #define pi 3.14159265
-#define GAINI 1850
+#define GAINI 1900
 #define GAINQ 1900
+
+uint32_t *pskI[4];
+uint32_t *pskQ[4];
 
 uint32_t bpskI[2] = {GAINI,
                     -GAINI};
 uint32_t bpskQ[2] = {0,
                      0};
 
-uint32_t qpskI[2] = {GAINI,
-                    -GAINI};
-uint32_t qpskQ[2] = {GAINQ,
+uint32_t qpskI[4] = {GAINI,
+                    -GAINI,
+                    -GAINI,
+                     GAINI};
+uint32_t qpskQ[4] = {GAINQ,
+                    GAINQ,
+                    -GAINQ,
                     -GAINQ};
 
 uint32_t psk8I[8] = {GAINI * 1,
@@ -84,33 +91,71 @@ uint32_t psk8Q[8] = {GAINQ * 0,
                      GAINQ * .71,
                     -GAINQ * .71,
                      GAINQ * 1,
-                     GAINQ * .71,
+                     -GAINQ * .71,
                     -GAINQ * 1,
                     -GAINQ * 0,
-                    -GAINQ * .71
+                    GAINQ * .71
                     };
+
+uint32_t qam16I[16] = {GAINI * .33,
+                      GAINI * .33,
+                      GAINI * 1,
+                      GAINI * 1,
+                      GAINI * .33,
+                      GAINI * .33,
+                      GAINI * 1,
+                      GAINI * 1,
+                      -GAINI * .33,
+                      -GAINI * .33,
+                      -GAINI * 1,
+                      -GAINI * 1,
+                      -GAINI * .33,
+                      -GAINI * .33,
+                      -GAINI * 1,
+                      -GAINI * 1,
+                    };
+uint32_t qam16Q[16] = {GAINQ * .33,
+                      GAINQ * 1,
+                      GAINQ * .33,
+                      GAINQ * 1,
+                      -GAINQ * .33,
+                      -GAINQ * 1,
+                      -GAINQ * .33,
+                      -GAINQ * 1,
+                      GAINQ * .33,
+                      GAINQ * 1,
+                      GAINQ * .33,
+                      GAINQ * 1,
+                      -GAINQ * .33,
+                      -GAINQ * 1,
+                      -GAINQ * .33,
+                      -GAINQ * 1,
+                    };
+
+uint32_t *bufferPtrI;
+uint32_t *bufferPtrQ;
 //-----------------------------------------------------------------------------
 // Global variables
 //-----------------------------------------------------------------------------
 uint16_t LUTA[4096]; //lookup table for DAC A
 uint16_t LUTB[4096]; //lookup table for DAC B
-uint16_t DCValueA = 0; //raw dc value from 0-4096, if zero means ac is on
-uint16_t DCValueB = 0; //raw dc value from 0-4096, if zero means ac is on
+uint16_t valueA = 0; //raw dc value from 0-4096, if zero means ac is on
+uint16_t valueB = 0; //raw dc value from 0-4096, if zero means ac is on
 uint32_t indexA = 0; //start at 0 to make sin
-uint32_t indexB = 0; //start at 1024 to create cos
+uint32_t indexB = 1024 << 20; //start at 1024 to create cos
 uint8_t AnotB = 1; //if True output DAC A in isr, else DAC B
 bool toneCommand = true;
 float amplitude = .5;
 uint32_t degreeShift = 0;
 
 //mod variables
-uint32_t bitsToParse = 342391;
-uint8_t shiftBy = 3;
+uint32_t bitsToParse = 1776411;
+uint8_t shiftBy = 2;
 int modIndex = 23;
-bool isMod = true;
-uint32_t modTemp = 0;
+bool isMod = false;
 uint32_t index = 0;
-uint32_t modMask = 7;
+uint32_t modMask = 3;
+bool isDC = false;
 
 uint32_t phaseShift = (int) ((4294967296 / FS) * 10000);
 //-----------------------------------------------------------------------------
@@ -183,27 +228,43 @@ void symbolTimerIsr()
     {
         if(modIndex < 0)
             modIndex = 23;
-            index = bitsToParse & (modMask << ((modIndex + 1) - shiftBy));
-            index = index >> ((modIndex + 1) - shiftBy);
-            modTemp = psk8I[index] | DC_WRITE_SHDN | DC_WRITE_GA;
-            SSI0_DR_R = modTemp;
-            modTemp = psk8Q[index] | DC_WRITE_SHDN | DC_WRITE_GA | DC_WRITE_AB;
-            SSI0_DR_R = modTemp;
-            modIndex -= shiftBy;
+        index = bitsToParse & (modMask << ((modIndex + 1) - shiftBy));
+        index = index >> ((modIndex + 1) - shiftBy);
+        valueA = (bufferPtrI[index] + GAINI);
+        valueA |= DC_WRITE_SHDN | DC_WRITE_GA;
+        SSI0_DR_R = valueA;
+        valueB = (bufferPtrQ[index] + GAINQ);
+        valueB |= DC_WRITE_SHDN | DC_WRITE_GA | DC_WRITE_AB;
+        SSI0_DR_R = valueB;
+        modIndex -= shiftBy;
     }
     else
     {
         if(AnotB)
         {
-            SSI0_DR_R = LUTA[indexA >> 20];
-            indexA += (phaseShift);
-            //indexA %= 4096;
+            if(!isDC)
+            {
+                //valueA = (amplitude / .5) * LUTA[indexA >> 20];
+                valueA = LUTA[indexA >> 20];
+                //valueA |= DC_WRITE_GA | DC_WRITE_SHDN;
+                if(toneCommand)
+                    indexA += (phaseShift);
+                indexA += (phaseShift);
+            }
+            SSI0_DR_R = valueA;
         }
         else
         {
-            SSI0_DR_R = LUTB[indexB >> 20];
-            indexB += (phaseShift);
-            //indexB %= 4096;
+            if(!isDC)
+            {
+//                valueB = (amplitude / .5) * LUTB[indexB >> 20]
+                valueB = LUTB[indexB >> 20];
+                //valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
+                if(toneCommand)
+                    indexB += (phaseShift);
+                indexB += (phaseShift);
+            }
+            SSI0_DR_R = valueB;
         }
     }
     if(toneCommand)
@@ -245,7 +306,7 @@ void initHw()
 //        LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN; //leave DC_WRITE_AB off to write to DACA
         LUTA[i] = 2150 + 1900 * sin((i / 4096.0) * (2 * pi));
         LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN;
-        LUTB[i] = 2150 + 1900 * cos((i / 4096.0) * (2 * pi));
+        LUTB[i] = 2150 + 1900 * sin((i / 4096.0) * (2 * pi));
         LUTB[i] |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
     }
 
@@ -285,7 +346,6 @@ uint8_t tokenizeInput(char *strInput, char *token_arr[])
 void processShell()
 {
     bool knownCommand = false;
-    toneCommand = false;
     bool end;
     char c;
     static char strInput[MAX_CHARS+1];
@@ -312,7 +372,7 @@ void processShell()
             count = 0;
             //token = strtok(strInput, " ");
 
-            token_count = tokenizeInput(strInput, token);
+            token_count = tokenizeInput(strInput, token) - 1;
 
             if (strcmp(token[0], "index") == 0)
             {
@@ -331,18 +391,19 @@ void processShell()
             if (strcmp(token[0], "dc") == 0)
             {
                 knownCommand = true;
+                isDC = true;
                 DC = atof(token[2]) + .5; //get value between 0 and 1
                 if(token[1][0] == 'a')
                 {
                     AnotB = true;
-                    DCValueA = DC * 4096; //value is now between 0 and 4095
-                    DCValueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
+                    valueA = DC * 4096; //value is now between 0 and 4095
+                    valueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                 }
                 else if(token[1][0] == 'b')
                 {
                     AnotB = false;
-                    DCValueB = DC * 4096; //value is now between 0 and 4095
-                    DCValueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
+                    valueB = DC * 4096; //value is now between 0 and 4095
+                    valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
                 }
             }
 
@@ -350,6 +411,8 @@ void processShell()
             if (strcmp(token[0], "sine") == 0)
             {
                 knownCommand = true;
+                isDC = false;
+                toneCommand = false;
                 token_count--;
                 // add code to process command
                 if(token_count)
@@ -373,6 +436,10 @@ void processShell()
                 if(token_count)
                 {
                     degreeShift = atoi(token[4]);
+                    if(token[1][0] == 'a')
+                        indexA = ((int)((degreeShift / 360.0) * 4096) << 20);
+                    else
+                        indexB = ((int)((degreeShift / 360.0) * 4096) << 20);
                     token_count--;
                 }
             }
@@ -382,15 +449,67 @@ void processShell()
             {
                 knownCommand = true;
                 toneCommand = true;
+                isDC = false;
+                token_count--;
                 // add code to process command
+                if(token_count)
+                {
+                    phaseShift = (int) ((4294967296 / FS) * atoi(token[1]));
+                    token_count--;
+                }
+                if(token_count)
+                {
+                    amplitude = atof(token[2]);
+                    token_count--;
+                }
+                if(token_count)
+                {
+                    degreeShift = atoi(token[3]);
+                    indexA = ((int)((degreeShift / 360.0) * 4096) << 20);
+                    indexB = ((int)(((degreeShift / 360.0) * 4096) + 1024) << 20);
+                    token_count--;
+                }
             }
 
             // mod bpsk|qpsk|8psk|16qam
             if (strcmp(token[0], "mod") == 0)
             {
                 knownCommand = true;
-
+                isDC = false;
+                isMod = true;
                 // add code to process command
+                if(token[1][0] == 'b')
+                {
+                    shiftBy = 1;
+                    modMask = 1;
+                    bitsToParse = 5592405;
+                    bufferPtrI = pskI[0];
+                    bufferPtrQ = pskQ[0];
+                }
+                else if(token[1][0] == 'q')
+                {
+                    shiftBy = 2;
+                    modMask = 3;
+                    bitsToParse = 454761243;
+                    bufferPtrI = pskI[1];
+                    bufferPtrQ = pskQ[1];
+                }
+                else if(token[1][0] == '8')
+                {
+                    shiftBy = 3;
+                    modMask = 7;
+                    bitsToParse = 342391;
+                    bufferPtrI = pskI[2];
+                    bufferPtrQ = pskQ[2];
+                }
+                else if(token[1][0] == '1')
+                {
+                    shiftBy = 4;
+                    modMask = 15;
+                    bitsToParse = 245591;
+                    bufferPtrI = pskI[3];
+                    bufferPtrQ = pskQ[3];
+                }
             }
 
             // filter FILTER
@@ -404,16 +523,17 @@ void processShell()
             if (strcmp(token[0], "raw") == 0)
             {
                 knownCommand = true;
+                isDC = true;
                 // add code to process command
                 if(token[1][0] == 'a')
                 {
-                    DCValueA = atoi(token[2]); //value between 0 and 4095
-                    DCValueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
+                    valueA = atoi(token[2]); //value between 0 and 4095
+                    valueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                 }
                 else if(token[1][0] == 'b')
                 {
-                    DCValueB = atoi(token[2]); //value between 0 and 4095
-                    DCValueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
+                    valueB = atoi(token[2]); //value between 0 and 4095
+                    valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
                 }
             }
 
@@ -461,6 +581,16 @@ int main(void)
     //phaseShift = (int) ((pow(2, 32) / FS) * 10000);
     // Greeting
     putsUart0("CSE 4377/5377 Modulator\n");
+
+    pskI[0] = bpskI;
+    pskI[1] = qpskI;
+    pskI[2] = psk8I;
+    pskI[3] = qam16I;
+
+    pskQ[0] = bpskQ;
+    pskQ[1] = qpskQ;
+    pskQ[2] = psk8Q;
+    pskQ[3] = qam16Q;
 
     // Main Loop
     while (true)
