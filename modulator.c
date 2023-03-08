@@ -35,6 +35,7 @@
 #include "spi0.h"
 #include "uart0.h"
 #include "wait.h"
+#include "modulator.h"
 
 //#define LDAC (*((volatile uint32_t *)(0x42000000 + (0x400043FC-0x40000000)*32 + 4*4)))
 
@@ -42,7 +43,7 @@
 
 #define FCYC 80e6
 #define FDAC 20e6
-#define FS 500000
+#define FS 30000
 
 #define SSI0TX PORTA,5
 #define SSI0RX PORTA,4
@@ -61,34 +62,79 @@
 #define GAINI 1900
 #define GAINQ 1900
 
+uint32_t *pskI[4];
+uint32_t *pskQ[4];
+
 uint32_t bpskI[2] = {GAINI,
                     -GAINI};
 uint32_t bpskQ[2] = {0,
                      0};
 
-uint32_t qpskI[2] = {GAINI,
-                    -GAINI};
-uint32_t qpskQ[2] = {GAINQ,
+uint32_t qpskI[4] = {GAINI,
+                    -GAINI,
+                    -GAINI,
+                     GAINI};
+uint32_t qpskQ[4] = {GAINQ,
+                     GAINQ,
+                    -GAINQ,
                     -GAINQ};
 
-uint32_t psk8I[8] = {GAINI * 1,     ///000 -> 0
-                     GAINI * .71,   ///001 -> 45
-                    -GAINI * .71,   ///010 -> 135
-                     GAINI * 0,     ///011 -> 90
-                     GAINI * .71,   ///100 -> 315
-                    -GAINI * 0,     ///101 -> 270
-                    -GAINI * 1,     ///110 -> 180
-                    -GAINI * .71    ///111 -> 225
+uint32_t psk8I[8] = {GAINI * 1,
+                     GAINI * .71,
+                    -GAINI * .71,
+                     GAINI * 0,
+                     GAINI * .71,
+                    -GAINI * 0,
+                    -GAINI * 1,
+                    -GAINI * .71
                     };
 uint32_t psk8Q[8] = {GAINQ * 0,
                      GAINQ * .71,
                     -GAINQ * .71,
                      GAINQ * 1,
-                     GAINQ * .71,
+                    -GAINQ * .71,
                     -GAINQ * 1,
                     -GAINQ * 0,
-                    -GAINQ * .71
+                     GAINQ * .71
                     };
+
+uint32_t qam16I[16] = {GAINI * .33,
+                       GAINI * .33,
+                       GAINI * 1,
+                       GAINI * 1,
+                       GAINI * .33,
+                       GAINI * .33,
+                       GAINI * 1,
+                       GAINI * 1,
+                      -GAINI * .33,
+                      -GAINI * .33,
+                      -GAINI * 1,
+                      -GAINI * 1,
+                      -GAINI * .33,
+                      -GAINI * .33,
+                      -GAINI * 1,
+                      -GAINI * 1,
+                    };
+uint32_t qam16Q[16] = {GAINQ * .33,
+                       GAINQ * 1,
+                       GAINQ * .33,
+                       GAINQ * 1,
+                      -GAINQ * .33,
+                      -GAINQ * 1,
+                      -GAINQ * .33,
+                      -GAINQ * 1,
+                       GAINQ * .33,
+                       GAINQ * 1,
+                       GAINQ * .33,
+                       GAINQ * 1,
+                      -GAINQ * .33,
+                      -GAINQ * 1,
+                      -GAINQ * .33,
+                      -GAINQ * 1,
+                    };
+
+uint32_t *bufferPtrI;
+uint32_t *bufferPtrQ;
 //-----------------------------------------------------------------------------
 // Global variables
 //-----------------------------------------------------------------------------
@@ -97,13 +143,24 @@ uint16_t LUTB[4096]; //lookup table for DAC B
 uint16_t valueA = 0; //raw dc value from 0-4096, if zero means ac is on
 uint16_t valueB = 0; //raw dc value from 0-4096, if zero means ac is on
 uint32_t indexA = 0; //start at 0 to make sin
-uint32_t indexB = 0; //start at 1024 to create cos
+uint32_t indexB = 1024 << 20; //start at 1024 to create cos
 uint8_t AnotB = 1; //if True output DAC A in isr, else DAC B
-bool DC = false;
 bool toneCommand = true;
 float amplitude = .5;
 uint32_t degreeShift = 0;
-char modStr[3] = "abc";
+
+//mod variables
+uint32_t bitsToParse = 1776411;
+uint8_t shiftBy = 2;
+int modIndex = 23;
+bool isMod = false;
+uint32_t index = 0;
+uint32_t modMask = 3;
+bool isDC = false;
+
+//filter variables
+bool isFilter = false;
+uint32_t conv_len = 0;
 
 uint32_t phaseShift = (int) ((4294967296 / FS) * 10000);
 //-----------------------------------------------------------------------------
@@ -172,33 +229,63 @@ void symbolTimerIsr()
     setPinValue(LDAC, 0);
     setPinValue(LDAC, 1);
 
-    if(AnotB)
+    if(isMod)
     {
-        if(!DC)
+        if(!isFilter)
         {
-            valueA = LUTA[indexA >> 20];
-            valueA |= DC_WRITE_GA | DC_WRITE_SHDN;
+            if(modIndex < 0)
+                modIndex = 23;
+            index = bitsToParse & (modMask << ((modIndex + 1) - shiftBy));
+            index = index >> ((modIndex + 1) - shiftBy);
         }
-        SSI0_DR_R = valueA;
-        if(toneCommand)
-            indexA += phaseShift;
         else
-            indexA += (phaseShift / 2);
-        //indexA %= 4096;
+        {
+            if(index > (sizeof(bufferPtrI)) / sizeof(bufferPtrI[0]))
+                index = 0;
+        }
+        valueA = (bufferPtrI[index] + GAINI);
+        valueA |= DC_WRITE_SHDN | DC_WRITE_GA;
+        SSI0_DR_R = valueA;
+        valueB = (bufferPtrQ[index] + GAINQ);
+        valueB |= DC_WRITE_SHDN | DC_WRITE_GA | DC_WRITE_AB;
+        SSI0_DR_R = valueB;
+        if(!isFilter)
+        {
+            modIndex -= shiftBy;
+        }
+        else
+        {
+            index++;
+        }
     }
     else
     {
-        if(!DC)
+        if(AnotB)
         {
-            valueB = LUTB[indexB >> 20];
-            valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
+            if(!isDC)
+            {
+                //valueA = (amplitude / .5) * LUTA[indexA >> 20];
+                valueA = LUTA[indexA >> 20];
+                //valueA |= DC_WRITE_GA | DC_WRITE_SHDN;
+                if(toneCommand)
+                    indexA += (phaseShift);
+                indexA += (phaseShift);
+            }
+            SSI0_DR_R = valueA;
         }
-        SSI0_DR_R = valueB;
-        if(toneCommand)
-            indexB += phaseShift;
         else
-            indexB += (phaseShift / 2);
-        //indexB %= 4096;
+        {
+            if(!isDC)
+            {
+//                valueB = (amplitude / .5) * LUTB[indexB >> 20]
+                valueB = LUTB[indexB >> 20];
+                //valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
+                if(toneCommand)
+                    indexB += (phaseShift);
+                indexB += (phaseShift);
+            }
+            SSI0_DR_R = valueB;
+        }
     }
     if(toneCommand)
         AnotB ^= 1;
@@ -209,6 +296,38 @@ void symbolTimerIsr()
 //-----------------------------------------------------------------------------
 // Subroutines
 //-----------------------------------------------------------------------------
+
+void conv_Arr(uint32_t *convArr, uint32_t bufferPtr[], uint8_t buff_len)
+{
+    uint16_t i = 0,j = 0, h_start = 0, x_end = 0;
+    int x_start = 0;
+
+    char buffer[50];
+
+    uint8_t h_len = 5;
+    conv_len = buff_len + h_len - 1;
+
+    //*convArr = (uint32_t*)malloc(conv_len * sizeof(uint32_t));
+
+    for (i = 0; i < conv_len; i++)
+    {
+      x_start = (((0) > (i - h_len + 1))) ? (0) : (i - h_len + 1);
+      x_end = (((i + 1) < (buff_len))) ? (i + 1) : (buff_len);
+      h_start = (((i) < (h_len - 1))) ? (i) : (h_len - 1);
+      //h_start++;
+
+      for(j = x_start; j < x_end; j++)
+      {
+          convArr[i] += h_rrc[h_start] * bufferPtr[j];
+          //printf("convArr[%d] = %d\n", i, (*convArr)[i]);
+          if(h_start != 0)
+              h_start = h_start - 1;
+      }
+      //temp2 = (*convArr*)[i];
+//      sprintf(buffer, "convArrI[%d]: %d\n", i, convArrI[i]);
+//      putsUart0(buffer);
+    }
+}
 
 // Initialize Hardware
 void initHw()
@@ -235,13 +354,41 @@ void initHw()
     uint32_t i;
     for(i = 0; i < 4096; i++)
     {
-//        LUTA[i] = 2150 + 1850 * sin((i / 4096.0) * (2 * pi));
-//        LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN; //leave DC_WRITE_AB off to write to DACA
         LUTA[i] = 2150 + 1900 * sin((i / 4096.0) * (2 * pi));
-        //LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN;
-        LUTB[i] = 2150 + 1900 * cos((i / 4096.0) * (2 * pi));
-        //LUTB[i] |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
+        LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN;
+        LUTB[i] = 2150 + 1900 * sin((i / 4096.0) * (2 * pi));
+        LUTB[i] |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
     }
+
+    pskI[0] = bpskI;
+    pskI[1] = qpskI;
+    pskI[2] = psk8I;
+    pskI[3] = qam16I;
+
+    pskQ[0] = bpskQ;
+    pskQ[1] = qpskQ;
+    pskQ[2] = psk8Q;
+    pskQ[3] = qam16Q;
+
+    conv_Arr(&conv_bpskI, rc_bpskI, (sizeof(rc_bpskI)/sizeof(rc_bpskI[0])));
+    conv_Arr(&conv_qpskI, rc_qpskI, (sizeof(rc_qpskI)/sizeof(rc_qpskI[0])));
+    conv_Arr(&conv_psk8I, rc_psk8I, (sizeof(rc_psk8I)/sizeof(rc_psk8I[0])));
+    conv_Arr(&conv_qam16I, rc_qam16I, (sizeof(rc_qam16I)/sizeof(rc_qam16I[0])));
+
+    conv_Arr(&conv_bpskQ, rc_bpskQ, (sizeof(rc_bpskQ)/sizeof(rc_bpskQ[0])));
+    conv_Arr(&conv_qpskQ, rc_qpskQ, (sizeof(rc_qpskQ)/sizeof(rc_qpskQ[0])));
+    conv_Arr(&conv_psk8Q, rc_psk8Q, (sizeof(rc_psk8Q)/sizeof(rc_psk8Q[0])));
+    conv_Arr(&conv_qam16Q, rc_qam16Q, (sizeof(rc_qam16Q)/sizeof(rc_qam16Q[0])));
+
+    conv_pskI[0] = conv_bpskI;
+    conv_pskI[1] = conv_qpskI;
+    conv_pskI[2] = conv_psk8I;
+    conv_pskI[3] = conv_qam16I;
+
+    conv_pskQ[0] = conv_bpskQ;
+    conv_pskQ[1] = conv_qpskQ;
+    conv_pskQ[2] = conv_psk8Q;
+    conv_pskQ[3] = conv_qam16Q;
 
     // Initialize symbol timer
     initSymbolTimer();
@@ -279,13 +426,14 @@ uint8_t tokenizeInput(char *strInput, char *token_arr[])
 void processShell()
 {
     bool knownCommand = false;
-    //toneCommand = false;
     bool end;
     char c;
     static char strInput[MAX_CHARS+1];
     char* token[MAX_ARGS];
     uint8_t token_count = 0;
     static uint8_t count = 0;
+
+    float DC = 0.0;
 
     if (kbhitUart0())
     {
@@ -302,8 +450,9 @@ void processShell()
         {
             strInput[count] = '\0';
             count = 0;
+            //token = strtok(strInput, " ");
 
-            token_count = tokenizeInput(strInput, token);
+            token_count = tokenizeInput(strInput, token) - 1;
 
             if (strcmp(token[0], "index") == 0)
             {
@@ -322,18 +471,18 @@ void processShell()
             if (strcmp(token[0], "dc") == 0)
             {
                 knownCommand = true;
-                DC = true;
-                toneCommand = false;
+                isDC = true;
+                DC = atof(token[2]) + .5; //get value between 0 and 1
                 if(token[1][0] == 'a')
                 {
                     AnotB = true;
-                    valueA = (atof(token[2]) + .5) * 4096; //get value between 0 and 1
+                    valueA = DC * 4096; //value is now between 0 and 4095
                     valueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                 }
                 else if(token[1][0] == 'b')
                 {
                     AnotB = false;
-                    valueB = (atof(token[2]) + .5) * 4096; //get value between 0 and 1
+                    valueB = DC * 4096; //value is now between 0 and 4095
                     valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
                 }
             }
@@ -342,7 +491,7 @@ void processShell()
             if (strcmp(token[0], "sine") == 0)
             {
                 knownCommand = true;
-                DC = false;
+                isDC = false;
                 toneCommand = false;
                 token_count--;
                 // add code to process command
@@ -367,6 +516,10 @@ void processShell()
                 if(token_count)
                 {
                     degreeShift = atoi(token[4]);
+                    if(token[1][0] == 'a')
+                        indexA = ((int)((degreeShift / 360.0) * 4096) << 20);
+                    else
+                        indexB = ((int)((degreeShift / 360.0) * 4096) << 20);
                     token_count--;
                 }
             }
@@ -376,32 +529,120 @@ void processShell()
             {
                 knownCommand = true;
                 toneCommand = true;
-                DC = false;
+                isDC = false;
+                token_count--;
                 // add code to process command
+                if(token_count)
+                {
+                    phaseShift = (int) ((4294967296 / FS) * atoi(token[1]));
+                    token_count--;
+                }
+                if(token_count)
+                {
+                    amplitude = atof(token[2]);
+                    token_count--;
+                }
+                if(token_count)
+                {
+                    degreeShift = atoi(token[3]);
+                    indexA = ((int)((degreeShift / 360.0) * 4096) << 20);
+                    indexB = ((int)(((degreeShift / 360.0) * 4096) + 1024) << 20);
+                    token_count--;
+                }
             }
 
             // mod bpsk|qpsk|8psk|16qam
             if (strcmp(token[0], "mod") == 0)
             {
                 knownCommand = true;
-                toneCommand = true;
-                // add code to process command
-                
+                isDC = false;
+                isMod = true;
+
+                if(token[1][0] == 'b')
+                {
+                    shiftBy = 1;
+                    modMask = 1;
+                    bitsToParse = 5592405;
+                    if(isFilter)
+                    {
+                        bufferPtrI = conv_pskI[0];
+                        bufferPtrQ = conv_pskQ[0];
+                    }
+                    else
+                    {
+                        bufferPtrI = pskI[0];
+                        bufferPtrQ = pskQ[0];
+                    }
+                }
+                else if(token[1][0] == 'q')
+                {
+                    shiftBy = 2;
+                    modMask = 3;
+                    bitsToParse = 454761243;
+                    if(isFilter)
+                    {
+                        bufferPtrI = conv_pskI[1];
+                        bufferPtrQ = conv_pskQ[1];
+                    }
+                    else
+                    {
+                        bufferPtrI = pskI[1];
+                        bufferPtrQ = pskQ[1];
+                    }
+                }
+                else if(token[1][0] == '8')
+                {
+                    shiftBy = 3;
+                    modMask = 7;
+                    bitsToParse = 342391;
+                    if(isFilter)
+                    {
+                        bufferPtrI = conv_pskI[2];
+                        bufferPtrQ = conv_pskQ[2];
+                    }
+                    else
+                    {
+                        bufferPtrI = pskI[2];
+                        bufferPtrQ = pskQ[2];
+                    }
+                }
+                else if(token[1][0] == '1')
+                {
+                    shiftBy = 4;
+                    modMask = 15;
+                    bitsToParse = 245591;
+                    if(isFilter)
+                    {
+                        bufferPtrI = conv_pskI[3];
+                        bufferPtrQ = conv_pskQ[3];
+                    }
+                    else
+                    {
+                        bufferPtrI = pskI[3];
+                        bufferPtrQ = pskQ[3];
+                    }
+                }
             }
 
             // filter FILTER
             if (strcmp(token[0], "filter") == 0)
             {
                 knownCommand = true;
-                // add code to process command
+                if(token[1][0] == 'r')
+                {
+                    isFilter = true;
+                }
+                else if(token[1][0] == 'o')
+                {
+                    isFilter = false;
+                }
             }
 
             // raw a|b RAW
             if (strcmp(token[0], "raw") == 0)
             {
                 knownCommand = true;
-                toneCommand = false;
-                DC = true;
+                isDC = true;
                 // add code to process command
                 if(token[1][0] == 'a')
                 {
