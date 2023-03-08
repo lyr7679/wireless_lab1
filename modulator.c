@@ -42,7 +42,7 @@
 
 #define FCYC 80e6
 #define FDAC 20e6
-#define FS 350000
+#define FS 35000
 
 #define SSI0TX PORTA,5
 #define SSI0RX PORTA,4
@@ -58,46 +58,48 @@
 #define DC_WRITE_SHDN 0x1000
 
 #define pi 3.14159265
-#define GAINI 1900
-#define GAINQ 1900
+#define MIDDLEI 2129
+#define MIDDLEQ 2139
+#define GAINI -1966
+#define GAINQ -1956
 
-uint32_t *pskI[4];
-uint32_t *pskQ[4];
+int *pskI[4];
+int *pskQ[4];
 
-uint32_t bpskI[2] = {GAINI,
+int bpskI[2] = {GAINI,
                     -GAINI};
-uint32_t bpskQ[2] = {0,
+int bpskQ[2] = {0,
                      0};
 
-uint32_t qpskI[4] = {GAINI,
+int qpskI[4] = {GAINI,
                     -GAINI,
                     -GAINI,
                      GAINI};
-uint32_t qpskQ[4] = {GAINQ,
+int qpskQ[4] = {GAINQ,
                      GAINQ,
                     -GAINQ,
                     -GAINQ};
 
-uint32_t psk8I[8] = {GAINI * 1,
+int psk8I[8] = {GAINI * 1,
                      GAINI * .71,
+                     GAINI * 0,
+                    -GAINI * .71,
+                    -GAINI * 1,
                     -GAINI * .71,
                      GAINI * 0,
-                     GAINI * .71,
-                    -GAINI * 0,
-                    -GAINI * 1,
-                    -GAINI * .71
+                     GAINI * .71
                     };
-uint32_t psk8Q[8] = {GAINQ * 0,
+int psk8Q[8] = {GAINQ * 0,
                      GAINQ * .71,
-                    -GAINQ * .71,
                      GAINQ * 1,
+                     GAINQ * .71,
+                     GAINQ * 0,
                     -GAINQ * .71,
                     -GAINQ * 1,
-                    -GAINQ * 0,
-                     GAINQ * .71
+                    -GAINQ * .71
                     };
 
-uint32_t qam16I[16] = {GAINI * .33,
+int qam16I[16] = {GAINI * .33,
                        GAINI * .33,
                        GAINI * 1,
                        GAINI * 1,
@@ -114,7 +116,7 @@ uint32_t qam16I[16] = {GAINI * .33,
                       -GAINI * 1,
                       -GAINI * 1,
                     };
-uint32_t qam16Q[16] = {GAINQ * .33,
+int qam16Q[16] = {GAINQ * .33,
                        GAINQ * 1,
                        GAINQ * .33,
                        GAINQ * 1,
@@ -132,8 +134,8 @@ uint32_t qam16Q[16] = {GAINQ * .33,
                       -GAINQ * 1,
                     };
 
-uint32_t *bufferPtrI;
-uint32_t *bufferPtrQ;
+int *bufferPtrI;
+int *bufferPtrQ;
 //-----------------------------------------------------------------------------
 // Global variables
 //-----------------------------------------------------------------------------
@@ -230,10 +232,10 @@ void symbolTimerIsr()
             modIndex = 23;
         index = bitsToParse & (modMask << ((modIndex + 1) - shiftBy));
         index = index >> ((modIndex + 1) - shiftBy);
-        valueA = (bufferPtrI[index] + GAINI);
+        valueA = (bufferPtrI[index] + MIDDLEI);
         valueA |= DC_WRITE_SHDN | DC_WRITE_GA;
         SSI0_DR_R = valueA;
-        valueB = (bufferPtrQ[index] + GAINQ);
+        valueB = (bufferPtrQ[index] + MIDDLEQ);
         valueB |= DC_WRITE_SHDN | DC_WRITE_GA | DC_WRITE_AB;
         SSI0_DR_R = valueB;
         modIndex -= shiftBy;
@@ -257,7 +259,7 @@ void symbolTimerIsr()
         {
             if(!isDC)
             {
-//                valueB = (amplitude / .5) * LUTB[indexB >> 20]
+                //valueB = (amplitude / .5) * LUTB[indexB >> 20]
                 valueB = LUTB[indexB >> 20];
                 //valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
                 if(toneCommand)
@@ -320,9 +322,7 @@ void initHw()
 
     // Initialize symbol timer
     initSymbolTimer();
-    //initLdacTimer();
 
-    //setPinValue(SSI0FSS, 0);
     setPinValue(LDAC, 1);
 
 }
@@ -400,6 +400,7 @@ void processShell()
             {
                 knownCommand = true;
                 isDC = true;
+                isMod = false;
                 DC = atof(token[2]) + .5; //get value between 0 and 1
                 if(token[1][0] == 'a')
                 {
@@ -514,7 +515,7 @@ void processShell()
                 {
                     shiftBy = 4;
                     modMask = 15;
-                    bitsToParse = 245591;
+                    bitsToParse = 6785451;
                     bufferPtrI = pskI[3];
                     bufferPtrQ = pskQ[3];
                 }
@@ -532,6 +533,7 @@ void processShell()
             {
                 knownCommand = true;
                 isDC = true;
+                isMod = false;
                 // add code to process command
                 if(token[1][0] == 'a')
                 {
@@ -586,7 +588,7 @@ int main(void)
     initHw();
 
     // Randomize data set
-    //phaseShift = (int) ((pow(2, 32) / FS) * 10000);
+
     // Greeting
     putsUart0("CSE 4377/5377 Modulator\n");
 
