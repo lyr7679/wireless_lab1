@@ -59,46 +59,46 @@
 #define DC_WRITE_SHDN 0x1000
 
 #define pi 3.14159265
-#define GAINI 1900
-#define GAINQ 1900
+//#define GAINI -1966
+//#define GAINQ -1956
 
-uint32_t *pskI[4];
-uint32_t *pskQ[4];
+int *pskI[4];
+int *pskQ[4];
 
-uint32_t bpskI[2] = {GAINI,
+int bpskI[2] = {GAINI,
                     -GAINI};
-uint32_t bpskQ[2] = {0,
+int bpskQ[2] = {0,
                      0};
 
-uint32_t qpskI[4] = {GAINI,
+int qpskI[4] = {GAINI,
                     -GAINI,
                     -GAINI,
                      GAINI};
-uint32_t qpskQ[4] = {GAINQ,
+int qpskQ[4] = {GAINQ,
                      GAINQ,
                     -GAINQ,
                     -GAINQ};
 
-uint32_t psk8I[8] = {GAINI * 1,
+int psk8I[8] = {GAINI * 1,
                      GAINI * .71,
+                     GAINI * 0,
+                    -GAINI * .71,
+                    -GAINI * 1,
                     -GAINI * .71,
                      GAINI * 0,
-                     GAINI * .71,
-                    -GAINI * 0,
-                    -GAINI * 1,
-                    -GAINI * .71
+                     GAINI * .71
                     };
-uint32_t psk8Q[8] = {GAINQ * 0,
+int psk8Q[8] = {GAINQ * 0,
                      GAINQ * .71,
-                    -GAINQ * .71,
                      GAINQ * 1,
+                     GAINQ * .71,
+                     GAINQ * 0,
                     -GAINQ * .71,
                     -GAINQ * 1,
-                    -GAINQ * 0,
-                     GAINQ * .71
+                    -GAINQ * .71
                     };
 
-uint32_t qam16I[16] = {GAINI * .33,
+int qam16I[16] = {GAINI * .33,
                        GAINI * .33,
                        GAINI * 1,
                        GAINI * 1,
@@ -115,7 +115,7 @@ uint32_t qam16I[16] = {GAINI * .33,
                       -GAINI * 1,
                       -GAINI * 1,
                     };
-uint32_t qam16Q[16] = {GAINQ * .33,
+int qam16Q[16] = {GAINQ * .33,
                        GAINQ * 1,
                        GAINQ * .33,
                        GAINQ * 1,
@@ -133,8 +133,8 @@ uint32_t qam16Q[16] = {GAINQ * .33,
                       -GAINQ * 1,
                     };
 
-uint32_t *bufferPtrI;
-uint32_t *bufferPtrQ;
+int *bufferPtrI;
+int *bufferPtrQ;
 //-----------------------------------------------------------------------------
 // Global variables
 //-----------------------------------------------------------------------------
@@ -229,6 +229,7 @@ void symbolTimerIsr()
     setPinValue(LDAC, 0);
     setPinValue(LDAC, 1);
 
+    //uint32_t temp = (sizeof(*bufferPtrI)) / sizeof(bufferPtrI[0]);
     if(isMod)
     {
         if(!isFilter)
@@ -240,13 +241,20 @@ void symbolTimerIsr()
         }
         else
         {
-            if(index > (sizeof(bufferPtrI)) / sizeof(bufferPtrI[0]))
+            if(index > conv_len)
                 index = 0;
         }
-        valueA = (bufferPtrI[index] + GAINI);
+        //valueA = (bufferPtrI[index]);
+        if(isFilter)
+            valueA = (bufferPtrI[index]) + MIDDLEI;
+        else
+            valueA = (bufferPtrI[index] + MIDDLEI);
         valueA |= DC_WRITE_SHDN | DC_WRITE_GA;
         SSI0_DR_R = valueA;
-        valueB = (bufferPtrQ[index] + GAINQ);
+        if(isFilter)
+            valueB = (bufferPtrQ[index] + MIDDLEQ);
+        else
+            valueB = (bufferPtrQ[index] + MIDDLEQ);
         valueB |= DC_WRITE_SHDN | DC_WRITE_GA | DC_WRITE_AB;
         SSI0_DR_R = valueB;
         if(!isFilter)
@@ -255,6 +263,7 @@ void symbolTimerIsr()
         }
         else
         {
+            //index = rand() % (conv_len + 1);
             index++;
         }
     }
@@ -297,20 +306,22 @@ void symbolTimerIsr()
 // Subroutines
 //-----------------------------------------------------------------------------
 
-void conv_Arr(uint32_t *convArr, uint32_t bufferPtr[], uint8_t buff_len)
+void conv_Arr(int32_t *convArr, int16_t bufferPtr[], uint8_t buff_len, char val)
 {
     uint16_t i = 0,j = 0, h_start = 0, x_end = 0;
-    int x_start = 0;
+    int32_t x_start = 0;
+    //int32_t temp = 0;
+    float temp = 0;
+    int temp2 = 0;
 
-    char buffer[50];
-
-    uint8_t h_len = 5;
+    uint8_t h_len = (sizeof(h_rrc) / sizeof(h_rrc[0]));
     conv_len = buff_len + h_len - 1;
 
     //*convArr = (uint32_t*)malloc(conv_len * sizeof(uint32_t));
 
     for (i = 0; i < conv_len; i++)
     {
+      temp = 0;
       x_start = (((0) > (i - h_len + 1))) ? (0) : (i - h_len + 1);
       x_end = (((i + 1) < (buff_len))) ? (i + 1) : (buff_len);
       h_start = (((i) < (h_len - 1))) ? (i) : (h_len - 1);
@@ -318,14 +329,17 @@ void conv_Arr(uint32_t *convArr, uint32_t bufferPtr[], uint8_t buff_len)
 
       for(j = x_start; j < x_end; j++)
       {
-          convArr[i] += h_rrc[h_start] * bufferPtr[j];
+          //temp2 = bufferPtr
+          temp += (h_rrc[h_start] * pow(2,8)) * (bufferPtr[j] * pow(2,8));
+          //temp += (h_rrc[h_start]) * (bufferPtr[j]);
+          //convArr[i] += h_rrc[h_start] * (bufferPtr[j] * pow(2,12));
           //printf("convArr[%d] = %d\n", i, (*convArr)[i]);
           if(h_start != 0)
               h_start = h_start - 1;
       }
-      //temp2 = (*convArr*)[i];
-//      sprintf(buffer, "convArrI[%d]: %d\n", i, convArrI[i]);
-//      putsUart0(buffer);
+          //convArr[i] = (temp >> 8);
+          temp2 = temp;
+          convArr[i] = (temp2 >> 8) ;
     }
 }
 
@@ -370,15 +384,20 @@ void initHw()
     pskQ[2] = psk8Q;
     pskQ[3] = qam16Q;
 
-    conv_Arr(&conv_bpskI, rc_bpskI, (sizeof(rc_bpskI)/sizeof(rc_bpskI[0])));
-    conv_Arr(&conv_qpskI, rc_qpskI, (sizeof(rc_qpskI)/sizeof(rc_qpskI[0])));
-    conv_Arr(&conv_psk8I, rc_psk8I, (sizeof(rc_psk8I)/sizeof(rc_psk8I[0])));
-    conv_Arr(&conv_qam16I, rc_qam16I, (sizeof(rc_qam16I)/sizeof(rc_qam16I[0])));
+//    for(i = 0; i < 31; i++)
+//    {
+//        h_rrc[i] = h_rrc[i] * pow(2,12);
+//    }
 
-    conv_Arr(&conv_bpskQ, rc_bpskQ, (sizeof(rc_bpskQ)/sizeof(rc_bpskQ[0])));
-    conv_Arr(&conv_qpskQ, rc_qpskQ, (sizeof(rc_qpskQ)/sizeof(rc_qpskQ[0])));
-    conv_Arr(&conv_psk8Q, rc_psk8Q, (sizeof(rc_psk8Q)/sizeof(rc_psk8Q[0])));
-    conv_Arr(&conv_qam16Q, rc_qam16Q, (sizeof(rc_qam16Q)/sizeof(rc_qam16Q[0])));
+    conv_Arr(&conv_bpskI, rc_bpskI, (sizeof(rc_bpskI)/sizeof(rc_bpskI[0])), 'i');
+    conv_Arr(&conv_qpskI, rc_qpskI, (sizeof(rc_qpskI)/sizeof(rc_qpskI[0])), 'i');
+    conv_Arr(&conv_psk8I, rc_psk8I, (sizeof(rc_psk8I)/sizeof(rc_psk8I[0])), 'i');
+    conv_Arr(&conv_qam16I, rc_qam16I, (sizeof(rc_qam16I)/sizeof(rc_qam16I[0])), 'i');
+
+    conv_Arr(&conv_bpskQ, rc_bpskQ, (sizeof(rc_bpskQ)/sizeof(rc_bpskQ[0])), 'q');
+    conv_Arr(&conv_qpskQ, rc_qpskQ, (sizeof(rc_qpskQ)/sizeof(rc_qpskQ[0])), 'q');
+    conv_Arr(&conv_psk8Q, rc_psk8Q, (sizeof(rc_psk8Q)/sizeof(rc_psk8Q[0])), 'q');
+    conv_Arr(&conv_qam16Q, rc_qam16Q, (sizeof(rc_qam16Q)/sizeof(rc_qam16Q[0])), 'i');
 
     conv_pskI[0] = conv_bpskI;
     conv_pskI[1] = conv_qpskI;
@@ -567,6 +586,7 @@ void processShell()
                     {
                         bufferPtrI = conv_pskI[0];
                         bufferPtrQ = conv_pskQ[0];
+                        conv_len = 37;
                     }
                     else
                     {
@@ -583,6 +603,7 @@ void processShell()
                     {
                         bufferPtrI = conv_pskI[1];
                         bufferPtrQ = conv_pskQ[1];
+                        conv_len = 45;
                     }
                     else
                     {
@@ -599,6 +620,7 @@ void processShell()
                     {
                         bufferPtrI = conv_pskI[2];
                         bufferPtrQ = conv_pskQ[2];
+                        conv_len = 61;
                     }
                     else
                     {
@@ -615,6 +637,7 @@ void processShell()
                     {
                         bufferPtrI = conv_pskI[3];
                         bufferPtrQ = conv_pskQ[3];
+                        conv_len = 93;
                     }
                     else
                     {
