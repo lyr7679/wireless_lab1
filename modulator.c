@@ -160,18 +160,17 @@ uint32_t index = 0;
 uint32_t modMask = 3;
 bool isDC = false;
 
+//filter variables
+bool isFilter = false;
+uint32_t conv_len = 0;
+uint32_t rcc_pos_idx = 0;
+uint32_t psk_pos_idx = 0;
+uint32_t current = 0;
+uint32_t check1 = 0;
+uint32_t check2 = 0;
+bool isQam = false;
+
 uint32_t phaseShift = (int) ((4294967296 / FS) * 10000);
-//-----------------------------------------------------------------------------
-// EEPROM
-//-----------------------------------------------------------------------------
-
-//-----------------------------------------------------------------------------
-// LUT
-//-----------------------------------------------------------------------------
-
-//-----------------------------------------------------------------------------
-// Control
-//-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
 // Timer
@@ -249,21 +248,21 @@ void symbolTimerIsr()
     //current = psk_pos_idx;
     if(isMod)
     {
-        if(!isFilter)
-        {
-//            if(modIndex < 0)
-//                modIndex = 23;
-//            index = bitsToParse & (modMask << ((modIndex + 1) - shiftBy));
-//            index = index >> ((modIndex + 1) - shiftBy);
-        }
-        else
-        {
-//            if(index > 30)
-//                index = 0;
-//            if(rrc_pos_idx > 30)
-//                rrc_pos_idx = 0;
-        }
-        //valueA = (bufferPtrI[index]);
+//         if(!isFilter)
+//         {
+// //            if(modIndex < 0)
+// //                modIndex = 23;
+// //            index = bitsToParse & (modMask << ((modIndex + 1) - shiftBy));
+// //            index = index >> ((modIndex + 1) - shiftBy);
+//         }
+//         else
+//         {
+// //            if(index > 30)
+// //                index = 0;
+// //            if(rrc_pos_idx > 30)
+// //                rrc_pos_idx = 0;
+//         }
+//         //valueA = (bufferPtrI[index]);
         if(isFilter)
         {
             //valueA = (bufferPtrI[index]) + MIDDLEI;
