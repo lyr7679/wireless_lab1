@@ -35,6 +35,7 @@
 #include "spi0.h"
 #include "uart0.h"
 #include "wait.h"
+#include "modulator.h"
 
 //#define LDAC (*((volatile uint32_t *)(0x42000000 + (0x400043FC-0x40000000)*32 + 4*4)))
 
@@ -200,11 +201,13 @@ void ldacTimerIsr()
 
 void setSymbolRate(float sampleRate)
 {
+    TIMER1_CTL_R &= ~TIMER_CTL_TAEN;                 // turn-off timer before reconfiguring
     TIMER1_TAILR_R = round(FCYC/sampleRate);
+    TIMER1_CTL_R |= TIMER_CTL_TAEN;                  // turn-on timer
 }
 
 // Must leave this timer on to ensure UI commands like DC are updated
-void initSymbolTimer(void)
+void initSymbolTimer()
 {
     // Enable clocks
     SYSCTL_RCGCTIMER_R |= SYSCTL_RCGCTIMER_R1;
@@ -239,6 +242,81 @@ void symbolTimerIsr()
         valueB |= DC_WRITE_SHDN | DC_WRITE_GA | DC_WRITE_AB;
         SSI0_DR_R = valueB;
         modIndex -= shiftBy;
+    int i = 0;
+    float tempA = 0;
+    float tempB = 0;
+    //uint32_t temp = (sizeof(*bufferPtrI)) / sizeof(bufferPtrI[0]);
+    //current = psk_pos_idx;
+    if(isMod)
+    {
+        if(!isFilter)
+        {
+//            if(modIndex < 0)
+//                modIndex = 23;
+//            index = bitsToParse & (modMask << ((modIndex + 1) - shiftBy));
+//            index = index >> ((modIndex + 1) - shiftBy);
+        }
+        else
+        {
+//            if(index > 30)
+//                index = 0;
+//            if(rrc_pos_idx > 30)
+//                rrc_pos_idx = 0;
+        }
+        //valueA = (bufferPtrI[index]);
+        if(isFilter)
+        {
+            //valueA = (bufferPtrI[index]) + MIDDLEI;
+            for(i = 0; i < 32; i++)
+            {
+                tempA += h_rrc[i] * bufferPtrI[current];
+                tempB += h_rrc[i] * bufferPtrQ[current];
+
+                if(isQam)
+                {
+                    current = (current + 1) % 64;
+                }
+                else
+                    current = (current + 1) % 32;
+            }
+            tempA = tempA / 65536 * 4;
+            tempB = tempB / 65536 * 4;
+
+            if(valueA > 1395)
+                valueA = 1395;
+            valueA = tempA + MIDDLEI;
+            check1 = valueA;
+            valueA |= DC_WRITE_SHDN | DC_WRITE_GA;
+            SSI0_DR_R = valueA;
+
+            if(valueB > 1388)
+                valueB = 1388;
+            valueB = tempB + MIDDLEQ;
+            check2 = valueB;
+            valueB |= DC_WRITE_SHDN | DC_WRITE_GA | DC_WRITE_AB;
+            SSI0_DR_R = valueB;
+
+            //index = rand() % (conv_len + 1);
+            //index++;
+            //rrc_pos_idx++;
+            //psk_pos_idx = (psk_pos_idx + 1) % 32;
+            if(isQam)
+                current = rand() % 65;
+            else
+                current = rand() % 33;
+        }
+        else
+        {
+            valueA = (bufferPtrI[index] + MIDDLEI);
+            valueA |= DC_WRITE_SHDN | DC_WRITE_GA;
+            SSI0_DR_R = valueA;
+
+            valueB = (bufferPtrQ[index] + MIDDLEQ);
+            valueB |= DC_WRITE_SHDN | DC_WRITE_GA | DC_WRITE_AB;
+            SSI0_DR_R = valueB;
+
+            index = rand() % (conv_len + 1);
+        }
     }
     else
     {
@@ -278,6 +356,43 @@ void symbolTimerIsr()
 //-----------------------------------------------------------------------------
 // Subroutines
 //-----------------------------------------------------------------------------
+
+void conv_Arr(int32_t *convArr, int16_t bufferPtr[], uint8_t buff_len)
+{
+    uint16_t i = 0,j = 0, h_start = 0, x_end = 0;
+    int32_t x_start = 0;
+    //int32_t temp = 0;
+    float temp = 0;
+    int temp2 = 0;
+
+    uint8_t h_len = (sizeof(h_rrc) / sizeof(h_rrc[0]));
+    conv_len = buff_len + h_len - 1;
+
+    //*convArr = (uint32_t*)malloc(conv_len * sizeof(uint32_t));
+
+    for (i = 0; i < conv_len; i++)
+    {
+      temp = 0;
+//      x_start = (((0) > (i - h_len + 1))) ? (0) : (i - h_len + 1);
+//      x_end = (((i + 1) < (buff_len))) ? (i + 1) : (buff_len);
+//      h_start = (((i) < (h_len - 1))) ? (i) : (h_len - 1);
+      x_start = (((0) > (i - buff_len + 1))) ? (0) : (i - buff_len + 1);
+      x_end = (((i + 1) < (h_len))) ? (i + 1) : (h_len);
+      h_start = (((i) < (buff_len - 1))) ? (i) : (buff_len - 1);
+      //h_start++;
+
+      for(j = x_start; j < x_end; j++)
+      {
+          //temp2 = bufferPtr
+          temp += (float)(bufferPtr[h_start]) * (h_rrc[j] * pow(2,16));
+          if(h_start != 0)
+              h_start = h_start - 1;
+      }
+          //convArr[i] = (temp >> 8);
+          //temp2 = (int)(temp / 65536);
+          convArr[i] = (int)(temp / 16384);
+    }
+}
 
 // Initialize Hardware
 void initHw()
@@ -398,6 +513,7 @@ void processShell()
             // dc a|b DC
             if (strcmp(token[0], "dc") == 0)
             {
+                setSymbolRate(350000);
                 knownCommand = true;
                 isDC = true;
                 isMod = false;
@@ -419,8 +535,10 @@ void processShell()
             // sine a|b FREQ [AMPL [PHASE [DC] ] ]
             if (strcmp(token[0], "sine") == 0)
             {
+                setSymbolRate(350000);
                 knownCommand = true;
                 isDC = false;
+                isMod = false;
                 toneCommand = false;
                 token_count--;
                 // add code to process command
@@ -456,8 +574,10 @@ void processShell()
             // tone FREQ [AMPL [PHASE [DC] ] ]
             if (strcmp(token[0], "tone") == 0)
             {
+                setSymbolRate(350000);
                 knownCommand = true;
                 toneCommand = true;
+                isMod = false;
                 isDC = false;
                 token_count--;
                 // add code to process command
@@ -483,41 +603,84 @@ void processShell()
             // mod bpsk|qpsk|8psk|16qam
             if (strcmp(token[0], "mod") == 0)
             {
+                setSymbolRate(30000);
                 knownCommand = true;
                 isDC = false;
                 isMod = true;
-                // add code to process command
+                isQam = false;
+
                 if(token[1][0] == 'b')
                 {
                     shiftBy = 1;
                     modMask = 1;
                     bitsToParse = 5592405;
-                    bufferPtrI = pskI[0];
-                    bufferPtrQ = pskQ[0];
+                    conv_len = 1;
+                    if(isFilter)
+                    {
+                        bufferPtrI = conv_pskI[0];
+                        bufferPtrQ = conv_pskQ[0];
+                        conv_len = 37;
+                    }
+                    else
+                    {
+                        bufferPtrI = pskI[0];
+                        bufferPtrQ = pskQ[0];
+                    }
                 }
                 else if(token[1][0] == 'q')
                 {
                     shiftBy = 2;
                     modMask = 3;
                     bitsToParse = 454761243;
-                    bufferPtrI = pskI[1];
-                    bufferPtrQ = pskQ[1];
+                    conv_len = 3;
+                    isQam = true;
+                    if(isFilter)
+                    {
+                        bufferPtrI = conv_pskI[1];
+                        bufferPtrQ = conv_pskQ[1];
+                        conv_len = 45;
+                    }
+                    else
+                    {
+                        bufferPtrI = pskI[1];
+                        bufferPtrQ = pskQ[1];
+                    }
                 }
                 else if(token[1][0] == '8')
                 {
                     shiftBy = 3;
                     modMask = 7;
                     bitsToParse = 342391;
-                    bufferPtrI = pskI[2];
-                    bufferPtrQ = pskQ[2];
+                    conv_len = 7;
+                    if(isFilter)
+                    {
+                        bufferPtrI = conv_pskI[2];
+                        bufferPtrQ = conv_pskQ[2];
+                        conv_len = 61;
+                    }
+                    else
+                    {
+                        bufferPtrI = pskI[2];
+                        bufferPtrQ = pskQ[2];
+                    }
                 }
                 else if(token[1][0] == '1')
                 {
                     shiftBy = 4;
                     modMask = 15;
-                    bitsToParse = 6785451;
-                    bufferPtrI = pskI[3];
-                    bufferPtrQ = pskQ[3];
+                    bitsToParse = 245591;
+                    conv_len = 15;
+                    if(isFilter)
+                    {
+                        bufferPtrI = conv_pskI[3];
+                        bufferPtrQ = conv_pskQ[3];
+                        conv_len = 93;
+                    }
+                    else
+                    {
+                        bufferPtrI = pskI[3];
+                        bufferPtrQ = pskQ[3];
+                    }
                 }
             }
 
@@ -525,15 +688,24 @@ void processShell()
             if (strcmp(token[0], "filter") == 0)
             {
                 knownCommand = true;
-                // add code to process command
+                if(token[1][0] == 'r')
+                {
+                    isFilter = true;
+                }
+                else if(token[1][0] == 'o')
+                {
+                    isFilter = false;
+                }
             }
 
             // raw a|b RAW
             if (strcmp(token[0], "raw") == 0)
             {
+                setSymbolRate(350000);
                 knownCommand = true;
                 isDC = true;
                 isMod = false;
+                toneCommand = false;
                 // add code to process command
                 if(token[1][0] == 'a')
                 {
@@ -552,6 +724,12 @@ void processShell()
             {
                 knownCommand = true;
                 NVIC_APINT_R = NVIC_APINT_VECTKEY | NVIC_APINT_SYSRESETREQ;
+            }
+
+            if(strcmp(token[0], "rate") == 0)
+            {
+                knownCommand = true;
+                setSymbolRate(atoi(token[1]));
             }
 
             if (!knownCommand)
