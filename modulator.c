@@ -43,7 +43,7 @@
 
 #define FCYC 80e6
 #define FDAC 20e6
-#define FS 35000
+#define FS 350000
 
 #define SSI0TX PORTA,5
 #define SSI0RX PORTA,4
@@ -59,10 +59,6 @@
 #define DC_WRITE_SHDN 0x1000
 
 #define pi 3.14159265
-#define MIDDLEI 2129
-#define MIDDLEQ 2139
-#define GAINI -1966
-#define GAINQ -1956
 
 int *pskI[4];
 int *pskQ[4];
@@ -228,44 +224,13 @@ void symbolTimerIsr()
     setPinValue(LDAC, 0);
     setPinValue(LDAC, 1);
 
-    if(isMod)
-    {
-        if(modIndex < 0)
-            modIndex = 23;
-        index = bitsToParse & (modMask << ((modIndex + 1) - shiftBy));
-        index = index >> ((modIndex + 1) - shiftBy);
-        valueA = (bufferPtrI[index] + MIDDLEI);
-        valueA |= DC_WRITE_SHDN | DC_WRITE_GA;
-        SSI0_DR_R = valueA;
-        valueB = (bufferPtrQ[index] + MIDDLEQ);
-        valueB |= DC_WRITE_SHDN | DC_WRITE_GA | DC_WRITE_AB;
-        SSI0_DR_R = valueB;
-        modIndex -= shiftBy;
     int i = 0;
     float tempA = 0;
     float tempB = 0;
-    //uint32_t temp = (sizeof(*bufferPtrI)) / sizeof(bufferPtrI[0]);
-    //current = psk_pos_idx;
     if(isMod)
     {
-//         if(!isFilter)
-//         {
-// //            if(modIndex < 0)
-// //                modIndex = 23;
-// //            index = bitsToParse & (modMask << ((modIndex + 1) - shiftBy));
-// //            index = index >> ((modIndex + 1) - shiftBy);
-//         }
-//         else
-//         {
-// //            if(index > 30)
-// //                index = 0;
-// //            if(rrc_pos_idx > 30)
-// //                rrc_pos_idx = 0;
-//         }
-//         //valueA = (bufferPtrI[index]);
         if(isFilter)
         {
-            //valueA = (bufferPtrI[index]) + MIDDLEI;
             for(i = 0; i < 32; i++)
             {
                 tempA += h_rrc[i] * bufferPtrI[current];
@@ -295,10 +260,6 @@ void symbolTimerIsr()
             valueB |= DC_WRITE_SHDN | DC_WRITE_GA | DC_WRITE_AB;
             SSI0_DR_R = valueB;
 
-            //index = rand() % (conv_len + 1);
-            //index++;
-            //rrc_pos_idx++;
-            //psk_pos_idx = (psk_pos_idx + 1) % 32;
             if(isQam)
                 current = rand() % 65;
             else
@@ -323,9 +284,7 @@ void symbolTimerIsr()
         {
             if(!isDC)
             {
-                //valueA = (amplitude / .5) * LUTA[indexA >> 20];
                 valueA = LUTA[indexA >> 20];
-                //valueA |= DC_WRITE_GA | DC_WRITE_SHDN;
                 if(toneCommand)
                     indexA += (phaseShift);
                 indexA += (phaseShift);
@@ -336,9 +295,7 @@ void symbolTimerIsr()
         {
             if(!isDC)
             {
-                //valueB = (amplitude / .5) * LUTB[indexB >> 20]
                 valueB = LUTB[indexB >> 20];
-                //valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
                 if(toneCommand)
                     indexB += (phaseShift);
                 indexB += (phaseShift);
@@ -352,43 +309,33 @@ void symbolTimerIsr()
     TIMER1_ICR_R = TIMER_ICR_TATOCINT;
 }
 
+
 //-----------------------------------------------------------------------------
 // Subroutines
 //-----------------------------------------------------------------------------
 
 void conv_Arr(int32_t *convArr, int16_t bufferPtr[], uint8_t buff_len)
 {
-    uint16_t i = 0,j = 0, h_start = 0, x_end = 0;
+    uint16_t i = 0, j = 0, h_start = 0, x_end = 0;
     int32_t x_start = 0;
-    //int32_t temp = 0;
     float temp = 0;
-    int temp2 = 0;
 
     uint8_t h_len = (sizeof(h_rrc) / sizeof(h_rrc[0]));
     conv_len = buff_len + h_len - 1;
 
-    //*convArr = (uint32_t*)malloc(conv_len * sizeof(uint32_t));
-
     for (i = 0; i < conv_len; i++)
     {
       temp = 0;
-//      x_start = (((0) > (i - h_len + 1))) ? (0) : (i - h_len + 1);
-//      x_end = (((i + 1) < (buff_len))) ? (i + 1) : (buff_len);
-//      h_start = (((i) < (h_len - 1))) ? (i) : (h_len - 1);
       x_start = (((0) > (i - buff_len + 1))) ? (0) : (i - buff_len + 1);
       x_end = (((i + 1) < (h_len))) ? (i + 1) : (h_len);
       h_start = (((i) < (buff_len - 1))) ? (i) : (buff_len - 1);
-      //h_start++;
 
       for(j = x_start; j < x_end; j++)
       {
-          //temp2 = bufferPtr
           temp += (float)(bufferPtr[h_start]) * (h_rrc[j] * pow(2,16));
           if(h_start != 0)
               h_start = h_start - 1;
       }
-          //convArr[i] = (temp >> 8);
-          //temp2 = (int)(temp / 65536);
           convArr[i] = (int)(temp / 16384);
     }
 }
@@ -519,13 +466,13 @@ void processShell()
                 DC = atof(token[2]) + .5; //get value between 0 and 1
                 if(token[1][0] == 'a')
                 {
-                    AnotB = true;
+                    AnotB = 1;
                     valueA = DC * 4096; //value is now between 0 and 4095
                     valueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                 }
                 else if(token[1][0] == 'b')
                 {
-                    AnotB = false;
+                    AnotB = 0;
                     valueB = DC * 4096; //value is now between 0 and 4095
                     valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
                 }
@@ -708,11 +655,13 @@ void processShell()
                 // add code to process command
                 if(token[1][0] == 'a')
                 {
+                    AnotB = 1;
                     valueA = atoi(token[2]); //value between 0 and 4095
                     valueA |= DC_WRITE_GA | DC_WRITE_SHDN; //turn on bit 12 and 13 for write register
                 }
                 else if(token[1][0] == 'b')
                 {
+                    AnotB = 0;
                     valueB = atoi(token[2]); //value between 0 and 4095
                     valueB |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB; //turn on bit 12 and 13 for write register
                 }

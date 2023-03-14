@@ -31,6 +31,7 @@ modulator.obj: ../nvic.h
 modulator.obj: ../spi0.h
 modulator.obj: ../uart0.h
 modulator.obj: ../wait.h
+modulator.obj: ../modulator.h
 
 ../modulator.c:
 
@@ -93,4 +94,6 @@ C:/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/include/machine/_limits.h
 ../uart0.h:
 
 ../wait.h:
+
+../modulator.h:
 
