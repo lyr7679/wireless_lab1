@@ -381,6 +381,20 @@ void initHw()
     pskQ[2] = psk8Q;
     pskQ[3] = qam16Q;
 
+    for(i = 0; i < 31; i++)
+    {
+        h_rrc[i] = h_rrc[i] * pow(2,16);
+    }
+    conv_pskI[0] = rc_bpskI;
+    conv_pskI[1] = rc_qpskI;
+    conv_pskI[2] = rc_psk8I;
+    conv_pskI[3] = rc_qam16I;
+
+    conv_pskQ[0] = rc_bpskQ;
+    conv_pskQ[1] = rc_qpskQ;
+    conv_pskQ[2] = rc_psk8Q;
+    conv_pskQ[3] = rc_qam16Q;
+
     // Initialize symbol timer
     initSymbolTimer();
 

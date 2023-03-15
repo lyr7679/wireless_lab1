@@ -12,6 +12,7 @@ C_SRCS += \
 ../clock.c \
 ../gpio.c \
 ../modulator.c \
+../modulator1.c \
 ../nvic.c \
 ../spi0.c \
 ../tm4c123gh6pm_startup_ccs.c \
@@ -22,6 +23,7 @@ C_DEPS += \
 ./clock.d \
 ./gpio.d \
 ./modulator.d \
+./modulator1.d \
 ./nvic.d \
 ./spi0.d \
 ./tm4c123gh6pm_startup_ccs.d \
@@ -32,6 +34,7 @@ OBJS += \
 ./clock.obj \
 ./gpio.obj \
 ./modulator.obj \
+./modulator1.obj \
 ./nvic.obj \
 ./spi0.obj \
 ./tm4c123gh6pm_startup_ccs.obj \
@@ -42,6 +45,7 @@ OBJS__QUOTED += \
 "clock.obj" \
 "gpio.obj" \
 "modulator.obj" \
+"modulator1.obj" \
 "nvic.obj" \
 "spi0.obj" \
 "tm4c123gh6pm_startup_ccs.obj" \
@@ -52,6 +56,7 @@ C_DEPS__QUOTED += \
 "clock.d" \
 "gpio.d" \
 "modulator.d" \
+"modulator1.d" \
 "nvic.d" \
 "spi0.d" \
 "tm4c123gh6pm_startup_ccs.d" \
@@ -62,6 +67,7 @@ C_SRCS__QUOTED += \
 "../clock.c" \
 "../gpio.c" \
 "../modulator.c" \
+"../modulator1.c" \
 "../nvic.c" \
 "../spi0.c" \
 "../tm4c123gh6pm_startup_ccs.c" \

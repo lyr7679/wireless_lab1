@@ -13,6 +13,7 @@ ORDERED_OBJS += \
 "./clock.obj" \
 "./gpio.obj" \
 "./modulator.obj" \
+"./modulator1.obj" \
 "./nvic.obj" \
 "./spi0.obj" \
 "./tm4c123gh6pm_startup_ccs.obj" \
@@ -161,8 +162,8 @@ wireless2.hex: $(EXE_OUTPUTS)
 # Other Targets
 clean:
 	-$(RM) $(BIN_OUTPUTS__QUOTED)$(EXE_OUTPUTS__QUOTED)
-	-$(RM) "clock.obj" "gpio.obj" "modulator.obj" "nvic.obj" "spi0.obj" "tm4c123gh6pm_startup_ccs.obj" "uart0.obj" "wait.obj" 
-	-$(RM) "clock.d" "gpio.d" "modulator.d" "nvic.d" "spi0.d" "tm4c123gh6pm_startup_ccs.d" "uart0.d" "wait.d" 
+	-$(RM) "clock.obj" "gpio.obj" "modulator.obj" "modulator1.obj" "nvic.obj" "spi0.obj" "tm4c123gh6pm_startup_ccs.obj" "uart0.obj" "wait.obj" 
+	-$(RM) "clock.d" "gpio.d" "modulator.d" "modulator1.d" "nvic.d" "spi0.d" "tm4c123gh6pm_startup_ccs.d" "uart0.d" "wait.d" 
 	-@echo 'Finished clean'
 	-@echo ' '
 

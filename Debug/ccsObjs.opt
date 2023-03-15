@@ -1,6 +1,7 @@
 "./clock.obj"
 "./gpio.obj"
 "./modulator.obj"
+"./modulator1.obj"
 "./nvic.obj"
 "./spi0.obj"
 "./tm4c123gh6pm_startup_ccs.obj"
