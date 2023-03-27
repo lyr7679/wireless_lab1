@@ -361,13 +361,22 @@ void initHw()
     selectPinPushPullOutput(SSI0FSS);
     selectPinPushPullOutput(LDAC);
 
+    float clip = 1;
     //create LUT
     uint32_t i;
     for(i = 0; i < 4096; i++)
     {
         LUTA[i] = 2150 + 1900 * sin((i / 4096.0) * (2 * pi));
+        if(LUTA[i] > (4096 * clip))
+            LUTA[i] = (4096 * clip);
+        else if(LUTA[i] < (4096 * (1-clip)))
+            LUTA[i] = (4096 * (1-clip));
         LUTA[i] |= DC_WRITE_GA | DC_WRITE_SHDN;
         LUTB[i] = 2150 + 1900 * sin((i / 4096.0) * (2 * pi));
+        if(LUTB[i] > (4096 * clip))
+            LUTB[i] = (4096 * clip);
+        else if(LUTB[i] < (4096 * (1-clip)))
+            LUTB[i] = (4096 * (1-clip));
         LUTB[i] |= DC_WRITE_GA | DC_WRITE_SHDN | DC_WRITE_AB;
     }
 
